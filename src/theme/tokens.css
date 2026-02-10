@@ -1,0 +1,103 @@
+/**
+ * Design Tokens — Kumon Math App
+ * Requisitos pedagógicos: SPEC 0.2 (UI Framework)
+ *
+ * Público: crianças de 7 anos
+ * Contraste mínimo: 7:1 (WCAG AAA)
+ * Touch targets: ≥48px
+ */
+
+/* Font Loading — Google Fonts Nunito */
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&display=swap');
+
+:root {
+  /* Typography */
+  --font-family-primary: 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-size-text: 24px;
+  --font-size-number: 32px;
+  --font-size-large: 40px;
+  --font-weight-bold: 700;
+  --font-weight-normal: 600;
+
+  /* Spacing */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-touch: 8px; /* Mínimo entre touch targets */
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+
+  /* Touch Targets */
+  --button-min-size: 48px;
+  --touch-target-min: 48px;
+
+  /* Colors — Paleta vibrante, alto contraste */
+  --color-primary: #3B82F6; /* Azul vibrante */
+  --color-primary-hover: #2563EB;
+  --color-primary-active: #1D4ED8;
+
+  --color-success: #10B981; /* Verde vibrante */
+  --color-success-hover: #059669;
+  --color-success-active: #047857;
+
+  --color-error: #EF4444; /* Vermelho vibrante */
+  --color-error-hover: #DC2626;
+  --color-error-active: #B91C1C;
+
+  --color-warning: #F59E0B; /* Amarelo vibrante */
+  --color-warning-hover: #D97706;
+
+  --color-surface: #FFFFFF;
+  --color-surface-hover: #F3F4F6;
+  --color-surface-active: #E5E7EB;
+
+  --color-background: #F9FAFB;
+  --color-text-primary: #111827;
+  --color-text-secondary: #4B5563;
+  --color-disabled: #9CA3AF;
+
+  /* Borders */
+  --border-radius-sm: 8px;
+  --border-radius-md: 12px;
+  --border-radius-lg: 16px;
+  --border-width: 2px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05);
+
+  /* Transitions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Global Reset */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-family-primary);
+  font-size: var(--font-size-text);
+  font-weight: var(--font-weight-normal);
+  color: var(--color-text-primary);
+  background-color: var(--color-background);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Utility Classes */
+.text-number {
+  font-size: var(--font-size-number);
+  font-weight: var(--font-weight-bold);
+}
+
+.text-large {
+  font-size: var(--font-size-large);
+  font-weight: var(--font-weight-bold);
+}

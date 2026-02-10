@@ -1,17 +1,26 @@
 import { create } from 'zustand';
 
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-interface GameState {
-  // Estado do jogo será definido conforme specs
+// Tipos
+export type CPAPhase = 'concrete' | 'pictorial' | 'abstract';
+
+export interface SessionData {
+  startTime: number;
+  attempts: number;
+  correctAnswers: number;
+  mistakes: number;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-interface GameActions {
-  // Ações serão definidas conforme specs
+export interface GameState {
+  currentExercise: string | null;
+  cpaPhase: CPAPhase;
+  level: number;
+  sessionData: SessionData | null;
 }
 
-export type GameStore = GameState & GameActions;
-
-export const useGameStore = create<GameStore>(() => ({
-  // Estado inicial será definido conforme specs
+// Store
+export const useGameStore = create<GameState>(() => ({
+  currentExercise: null,
+  cpaPhase: 'concrete',
+  level: 1,
+  sessionData: null,
 }));

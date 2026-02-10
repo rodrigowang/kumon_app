@@ -1,4 +1,5 @@
-# Task: Inicializar Projeto (0.1)
-Criar projeto React + TypeScript + Vite.
-Configurar ESLint, Prettier, tsconfig com strict: true.
-Criar estrutura de pastas conforme skill do Dev.
+# Task: Setup Zustand (0.3)
+Instalar Zustand. Criar stores tipadas vazias:
+- useGameStore (exercício atual, fase CPA, nível, sessão)
+- useProgressStore (histórico, estrelas, mapa)
+- useSettingsStore (volume)

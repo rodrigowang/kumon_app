@@ -1,17 +1,24 @@
 import { create } from 'zustand';
+import type { CPAPhase } from './useGameStore';
 
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-interface ProgressState {
-  // Estado de progresso será definido conforme specs
+// Tipos
+export interface HistoryEntry {
+  exerciseId: string;
+  timestamp: number;
+  wasCorrect: boolean;
+  attempts: number;
+  cpaPhase: CPAPhase;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-interface ProgressActions {
-  // Ações serão definidas conforme specs
+export interface ProgressState {
+  history: HistoryEntry[];
+  stars: Record<string, number>;
+  unlockedLevels: number[];
 }
 
-export type ProgressStore = ProgressState & ProgressActions;
-
-export const useProgressStore = create<ProgressStore>(() => ({
-  // Estado inicial será definido conforme specs
+// Store
+export const useProgressStore = create<ProgressState>(() => ({
+  history: [],
+  stars: {},
+  unlockedLevels: [1],
 }));

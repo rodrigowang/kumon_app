@@ -1,76 +1,131 @@
+/**
+ * App Root
+ *
+ * Página de demonstração do UI Framework.
+ * Componentes: Button, Card, Container, Heading
+ */
+
 import { useState } from 'react'
+import { Stack, Group, Text } from '@mantine/core'
+import { notifications } from '@mantine/notifications'
+import { Button, Card, Container, Heading } from './components/ui'
 
 function App() {
   const [count, setCount] = useState(0)
 
+  const handleSuccess = () => {
+    notifications.show({
+      title: 'Muito bem!',
+      message: 'Resposta correta!',
+      color: 'green',
+      autoClose: 3000,
+    })
+  }
+
+  const handleError = () => {
+    notifications.show({
+      title: 'Ops!',
+      message: 'Tente novamente',
+      color: 'red',
+      autoClose: 3000,
+    })
+  }
+
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '100vh',
-        backgroundColor: '#f5f5f5',
-        padding: '20px',
-      }}
-    >
-      <h1
-        style={{
-          fontSize: '48px',
-          color: '#4CAF50',
-          marginBottom: '24px',
-          fontWeight: 800,
-        }}
-      >
-        Kumon Math App
-      </h1>
-      <p style={{ fontSize: '24px', marginBottom: '32px' }}>
-        Projeto inicializado com sucesso! ✅
-      </p>
-      <button
-        data-testid="play-button"
-        onClick={() => {
-          setCount((c) => c + 1)
-        }}
-        style={{
-          fontSize: '32px',
-          padding: '20px 40px',
-          backgroundColor: '#4CAF50',
-          color: 'white',
-          border: 'none',
-          borderRadius: '16px',
-          cursor: 'pointer',
-          fontWeight: 700,
-          minWidth: '240px',
-          minHeight: '80px',
-          touchAction: 'manipulation',
-        }}
-        onMouseDown={(e) => {
-          e.currentTarget.style.transform = 'scale(0.95)'
-        }}
-        onMouseUp={(e) => {
-          e.currentTarget.style.transform = 'scale(1)'
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.transform = 'scale(1)'
-        }}
-      >
-        Clique aqui: {count}
-      </button>
-      <p
-        style={{
-          fontSize: '18px',
-          marginTop: '24px',
-          color: '#666',
-          textAlign: 'center',
-        }}
-      >
-        TypeScript strict ✅ • ESLint ✅ • Prettier ✅ • PWA ✅
-        <br />
-        Zustand ✅ • Howler.js ✅ • Fonte Nunito ✅
-      </p>
-    </div>
+    <Container size="md" data-testid="main-container" py="xl">
+      <Stack gap="xl">
+        {/* Header */}
+        <Heading level={1} data-testid="page-title" ta="center">
+          Kumon Math App
+        </Heading>
+
+        {/* Demo Card */}
+        <Card data-testid="demo-card">
+          <Stack gap="md">
+            <Heading level={2} data-testid="demo-heading">
+              UI Framework — Demo
+            </Heading>
+
+            <Text size="md">
+              Framework de UI com componentes otimizados para crianças de 7 anos.
+            </Text>
+
+            <Text className="text-number" c="blue">
+              Contador: {count}
+            </Text>
+
+            <Group gap="sm">
+              <Button
+                data-testid="increment-button"
+                onClick={() => setCount((c) => c + 1)}
+              >
+                + Adicionar
+              </Button>
+
+              <Button
+                data-testid="reset-button"
+                variant="outline"
+                onClick={() => setCount(0)}
+              >
+                Resetar
+              </Button>
+            </Group>
+          </Stack>
+        </Card>
+
+        {/* Feedback Demo */}
+        <Card data-testid="feedback-card">
+          <Stack gap="md">
+            <Heading level={3} data-testid="feedback-heading">
+              Feedback Visual
+            </Heading>
+
+            <Text size="md">
+              Botões com feedback pedagógico (success/error):
+            </Text>
+
+            <Group gap="sm">
+              <Button
+                data-testid="success-button"
+                variant="success"
+                onClick={handleSuccess}
+              >
+                ✓ Acertei!
+              </Button>
+
+              <Button
+                data-testid="error-button"
+                variant="error"
+                onClick={handleError}
+              >
+                ✗ Errei
+              </Button>
+            </Group>
+          </Stack>
+        </Card>
+
+        {/* Specs Info */}
+        <Card data-testid="specs-card" bg="blue.0">
+          <Stack gap="xs">
+            <Text size="sm" fw={700}>
+              ✅ Requisitos atendidos:
+            </Text>
+            <Text size="sm">
+              • Fonte Nunito carregada via Google Fonts
+              <br />
+              • Tokens CSS: --button-min-size (48px), --font-size-number (32px)
+              <br />
+              • Botões ≥48px com estados visuais (hover, active, disabled)
+              <br />
+              • Tema Mantine customizado (cores vibrantes, alto contraste)
+              <br />
+              • Todos os componentes com data-testid obrigatório
+              <br />• Feedback visual em 150ms (transform: scale)
+            </Text>
+          </Stack>
+        </Card>
+      </Stack>
+    </Container>
   )
 }
 

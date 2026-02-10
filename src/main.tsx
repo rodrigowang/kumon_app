@@ -1,7 +1,12 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import { MantineProvider } from '@mantine/core'
+import { Notifications } from '@mantine/notifications'
 import App from './App'
-import './index.css'
+import { theme } from './theme/mantine'
+import './theme/tokens.css'
+import '@mantine/core/styles.css'
+import '@mantine/notifications/styles.css'
 
 const rootElement = document.getElementById('root')
 if (!rootElement) {
@@ -10,6 +15,9 @@ if (!rootElement) {
 
 ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
-    <App />
+    <MantineProvider theme={theme}>
+      <Notifications position="top-center" />
+      <App />
+    </MantineProvider>
   </React.StrictMode>
 )
