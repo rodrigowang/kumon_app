@@ -1,0 +1,8 @@
+# Kumon Math App - robots.txt
+
+User-agent: *
+Allow: /
+
+# O app é pensado para uso offline/PWA, não para indexação
+# Remova esta diretiva se quiser permitir crawlers
+Disallow: /

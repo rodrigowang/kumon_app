@@ -36,6 +36,111 @@ export default defineConfig({
           },
         ],
       },
+      workbox: {
+        // Aumentar o limite de aviso para arquivos grandes (modelos MNIST)
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB
+
+        // Estratégias de cache personalizadas
+        runtimeCaching: [
+          // Cache para assets estáticos (JS, CSS, fontes, imagens)
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 ano
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'gstatic-fonts-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 ano
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+
+          // Cache específico para modelos MNIST (.bin, .json)
+          // Estratégia CacheFirst: prioriza cache local, ideal para arquivos pesados e estáticos
+          {
+            urlPattern: /\/models\/.*\.(bin|json)$/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'mnist-model-cache',
+              expiration: {
+                maxEntries: 20,
+                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 dias
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+
+          // Cache para arquivos de áudio (feedback sonoro)
+          {
+            urlPattern: /\/sounds\/.*\.(mp3|wav|ogg)$/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'audio-cache',
+              expiration: {
+                maxEntries: 30,
+                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 dias
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+
+          // Cache para imagens (ícones, ilustrações, etc)
+          {
+            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'images-cache',
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 dias
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+
+          // StaleWhileRevalidate para CDNs externas (TensorFlow.js, etc)
+          {
+            urlPattern: /^https:\/\/cdn\.jsdelivr\.net\/.*/i,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'cdn-cache',
+              expiration: {
+                maxEntries: 20,
+                maxAgeSeconds: 60 * 60 * 24 * 7, // 7 dias
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+        ],
+
+        // Arquivos adicionais para precache (incluir explicitamente se necessário)
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+      },
     }),
   ],
 });

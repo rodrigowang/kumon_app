@@ -9,6 +9,7 @@ import { useState } from 'react'
 import { Stack, Group, Text } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { Button, Card, Container, Heading } from './components/ui'
+import { SoundTester } from './components/dev'
 
 function App() {
   const [count, setCount] = useState(0)
@@ -104,6 +105,9 @@ function App() {
           </Stack>
         </Card>
 
+        {/* Sound Tester */}
+        <SoundTester />
+
         {/* Specs Info */}
         <Card data-testid="specs-card" bg="blue.0">
           <Stack gap="xs">
@@ -120,7 +124,9 @@ function App() {
               • Tema Mantine customizado (cores vibrantes, alto contraste)
               <br />
               • Todos os componentes com data-testid obrigatório
-              <br />• Feedback visual em 150ms (transform: scale)
+              <br />
+              • Feedback visual em 150ms (transform: scale)
+              <br />• Hook useSound com 4 sons (sintéticos via Web Audio API)
             </Text>
           </Stack>
         </Card>

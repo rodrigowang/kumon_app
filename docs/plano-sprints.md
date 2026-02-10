@@ -60,7 +60,7 @@ playCorrect(), playWrong(), playCelebration(), playClick().
 Incluir 4-5 mp3 curtos em src/assets/sounds/.
 Deve funcionar com volume 0 (feedback visual basta).
 EOF
-./scripts/orchestrate.sh audio-setup
+./scripts/orchestrate.sh --dev audio-setup
 
 # Task 0.5
 cat > .agents/current-task.md << 'EOF'
