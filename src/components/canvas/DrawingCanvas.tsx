@@ -6,6 +6,7 @@ export interface DrawingCanvasHandle {
   clear: () => void;
   isEmpty: () => boolean;
   getImageData: () => string | null;
+  getCanvasElement: () => HTMLCanvasElement | null;
 }
 
 interface DrawingCanvasProps {
@@ -91,6 +92,9 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
           return null;
         }
         return canvasRef.current?.toDataURL('image/png') ?? null;
+      },
+      getCanvasElement: () => {
+        return canvasRef.current;
       },
     }));
 

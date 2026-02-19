@@ -1,11 +1,36 @@
 # Modelo MNIST para OCR
 
-Este diretório deve conter os arquivos do modelo TensorFlow.js pré-treinado para reconhecimento de dígitos manuscritos (0-9).
+Este diretório contém os arquivos do modelo TensorFlow.js pré-treinado para reconhecimento de dígitos manuscritos (0-9).
 
-## Arquivos necessários
+## Fonte do Modelo
 
-- `model.json` - Arquitetura do modelo
-- `group1-shard1of1.bin` (ou similar) - Pesos do modelo
+**Repositório**: [SciSharp/Keras.NET](https://github.com/SciSharp/Keras.NET)
+**Localização**: `Examples/Keras.Playground/wwwroot/MNIST/`
+**URL Direta**: https://github.com/SciSharp/Keras.NET/tree/master/Examples/Keras.Playground/wwwroot/MNIST
+
+### Código de Treinamento
+
+O modelo foi treinado usando o exemplo CNN oficial do Keras.NET:
+- **Código fonte**: [MNIST_CNN.cs](https://github.com/SciSharp/Keras.NET/blob/master/Examples/BasicSamples/MNIST_CNN.cs)
+- **Configuração de treinamento**:
+  - Batch size: 128
+  - Epochs: 12
+  - Optimizer: Adadelta
+  - Loss: Categorical crossentropy
+  - Backend: CNTK (Microsoft Cognitive Toolkit)
+
+### Metadados do Modelo
+
+- **Gerado com**: Keras v2.2.4
+- **Backend**: CNTK
+- **Convertido com**: TensorFlow.js Converter v1.2.2.1
+- **Acurácia estimada**: ~99% no MNIST test set
+
+## Arquivos Presentes
+
+- `model.json` - Arquitetura do modelo (3.8KB)
+- `group1-shard1of2.bin` - Pesos do modelo, parte 1 (4.0MB)
+- `group1-shard2of2.bin` - Pesos do modelo, parte 2 (592KB)
 
 ## Como obter o modelo
 

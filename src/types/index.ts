@@ -15,3 +15,36 @@ export interface Progress {
 export interface Settings {
   // Será definido conforme spec
 }
+
+// Sistema de Progressão (Kumon + CPA)
+export type {
+  CpaPhase,
+  Operation,
+  ProblemResult,
+  MasteryLevel,
+} from './progression';
+
+// Problemas Matemáticos
+export type { Problem } from './problem';
+
+// Detector de Hesitação
+export type {
+  ResponseSpeed,
+  HesitationTimerState,
+  HesitationAnalysis,
+  HesitationConfig,
+} from './hesitation';
+export { DEFAULT_HESITATION_CONFIG } from './hesitation';
+
+// Algoritmo de Maestria
+export type {
+  ExerciseResult,
+  ProgressionDecision,
+  MasteryAnalysis,
+  MasteryConfig,
+} from './mastery';
+export {
+  DEFAULT_MASTERY_CONFIG,
+  MICROLEVEL_PROGRESSION,
+  CPA_PROGRESSION,
+} from './mastery';

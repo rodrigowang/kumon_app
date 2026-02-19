@@ -9,11 +9,14 @@ import { useState, useEffect } from 'react'
 import { Stack, Group, Text } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { Button, Card, Container, Heading, LoadingScreen } from './components/ui'
-import { SoundTester, CanvasTester, OCRTester, ExerciseTester } from './components/dev'
+import { SoundTester, CanvasTester, OCRTester, ExerciseTester, AbstractExerciseTester } from './components/dev'
 import { useOCRModel } from './hooks'
 import { useGameStore } from './stores/useGameStore'
 
+type AppView = 'home' | 'abstract-exercise'
+
 function App() {
+  const [currentView, setCurrentView] = useState<AppView>('home')
   const [count, setCount] = useState(0)
   const [retryKey, setRetryKey] = useState(0)
 
@@ -68,6 +71,11 @@ function App() {
         data-testid="ocr-error-screen"
       />
     )
+  }
+
+  // Tela de Exercício Abstrato (fullscreen)
+  if (currentView === 'abstract-exercise') {
+    return <AbstractExerciseTester onBack={() => setCurrentView('home')} ocrModel={model} />
   }
 
   // App principal (só renderiza quando modelo estiver pronto)
@@ -155,6 +163,22 @@ function App() {
 
         {/* Exercise Screen Tester */}
         <ExerciseTester />
+
+        {/* Abstract Exercise Tester (Fase Abstrata Completa) */}
+        <Card data-testid="abstract-exercise-card">
+          <Stack gap="md">
+            <Heading level={3}>🎮 Fase Abstrata - Motor Completo</Heading>
+            <Text size="md">
+              Tela de exercício com integração completa: gerador + hesitação + maestria
+            </Text>
+            <Button
+              data-testid="open-abstract-exercise"
+              onClick={() => setCurrentView('abstract-exercise')}
+            >
+              Abrir Tela de Exercício
+            </Button>
+          </Stack>
+        </Card>
 
         {/* Specs Info */}
         <Card data-testid="specs-card" bg="blue.0">

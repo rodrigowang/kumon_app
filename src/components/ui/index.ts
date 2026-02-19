@@ -23,3 +23,5 @@ export { OCRRetryOverlay } from './OCRRetryOverlay';
 export { OCRFeedbackOverlay } from './OCRFeedbackOverlay';
 export { NumericKeypadOverlay } from './NumericKeypadOverlay';
 export { FloatingKeypadButton } from './FloatingKeypadButton';
+export { default as FeedbackOverlay } from './FeedbackOverlay';
+export type { FeedbackType, FeedbackOverlayProps } from './FeedbackOverlay';

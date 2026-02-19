@@ -195,10 +195,18 @@ npm run lint
 - Touch-friendly, data-testid presente
 
 ### ✅ OCR Pipeline Completo (Tasks 1.4, 1.5, 1.6 - Semana 1)
-- **Modelo CNN pré-treinado** (SciSharp/Keras.NET, ~99% acurácia MNIST)
-  - Conv2D×2 + MaxPool + Dense, ~600K parâmetros
-  - Input: Tensor4D `[1, 28, 28, 1]` (preserva informação espacial)
-  - Substituiu modelo Dense antigo (~92% acurácia)
+- **Modelo CNN pré-treinado MNIST** (~99% acurácia)
+  - **Origem**: [SciSharp/Keras.NET](https://github.com/SciSharp/Keras.NET/tree/master/Examples/Keras.Playground/wwwroot/MNIST)
+  - **Código de treinamento**: [MNIST_CNN.cs](https://github.com/SciSharp/Keras.NET/blob/master/Examples/BasicSamples/MNIST_CNN.cs)
+  - **Gerado com**: Keras v2.2.4 + backend CNTK (Microsoft Cognitive Toolkit)
+  - **Treinamento**: 12 epochs, batch size 128, optimizer Adadelta
+  - **Convertido para TF.js**: TensorFlow.js Converter v1.2.2.1
+  - **Arquitetura**: Conv2D(32)→Conv2D(64)→MaxPool(2×2)→Dropout(0.25)→Flatten→Dense(128)→Dropout(0.5)→Dense(10, Softmax)
+  - **Parâmetros**: ~600K
+  - **Tamanho**: 4.6MB (model.json + 2 weight shards)
+  - **Input**: Tensor4D `[1, 28, 28, 1]` (preserva informação espacial)
+  - **Substituiu**: Modelo Dense antigo (1 camada, ~92% acurácia)
+  - **Localização**: `public/models/mnist/` (hospeado localmente, não CDN)
 - **Hook `useOCRModel`**: carrega modelo, warmup, inferência
 - **Utils OCR completos**:
   - `tensorOps.ts`: canvas → Tensor4D (resize 28×28, normalização)
@@ -279,6 +287,37 @@ npm run lint
 - Sons de celebração (acertos em streak)
 - Animações de confete/estrelas
 - Sistema de níveis visuais (medalhas, progressão)
+
+---
+
+## 7. Dependências Externas Críticas
+
+### 🧠 Modelo OCR (TensorFlow.js)
+
+| Aspecto | Detalhes |
+|---------|----------|
+| **Fonte** | [SciSharp/Keras.NET](https://github.com/SciSharp/Keras.NET) |
+| **Arquivos** | [Examples/Keras.Playground/wwwroot/MNIST](https://github.com/SciSharp/Keras.NET/tree/master/Examples/Keras.Playground/wwwroot/MNIST) |
+| **Código de Treinamento** | [MNIST_CNN.cs](https://github.com/SciSharp/Keras.NET/blob/master/Examples/BasicSamples/MNIST_CNN.cs) |
+| **Licença** | Apache 2.0 (SciSharp) |
+| **Versão do Modelo** | Keras 2.2.4, CNTK backend |
+| **Conversão** | TensorFlow.js Converter v1.2.2.1 |
+| **Acurácia** | ~99% (MNIST test set, 12 epochs) |
+| **Tamanho** | 4.6MB (3 arquivos) |
+| **Data de Download** | 11/fev/2026 |
+| **Localização Local** | `public/models/mnist/` |
+
+### 📦 Bibliotecas NPM Principais
+
+| Biblioteca | Versão | Propósito |
+|------------|--------|-----------|
+| `@tensorflow/tfjs` | ^4.22.0 | Inferência OCR no browser |
+| `perfect-freehand` | ^1.2.2 | Desenho suave no canvas |
+| `@mantine/core` | ^7.17.8 | Framework UI acessível |
+| `zustand` | ^5.0.11 | State management |
+| `howler` | ^2.2.4 | Feedback sonoro |
+| `react` | ^18.3.1 | UI framework |
+| `@playwright/test` | ^1.58.2 | Testes E2E |
 
 ---
 
