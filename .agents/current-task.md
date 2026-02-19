@@ -1,5 +1,5 @@
-# Task: PWA - Service Worker e Cache (0.5.2)
-1. Configurar a estratégia de cache no `VitePWA` (Workbox).
-2. Implementar cache específico para os arquivos do modelo MNIST (.bin / .json).
-3. Utilizar estratégia `CacheFirst` ou `StaleWhileRevalidate` para assets pesados.
-4. Validar se o app carrega os arquivos do modelo em modo Offline.
+# Task: Fluxo Confirmação OCR - Fallback (1.7.2)
+1. Implementar contador de tentativas falhas (confiança <50% ou ✗ na confirmação) no `useGameStore`.
+2. Após 3 tentativas falhas, exibir ícone discreto de teclado numérico no canto da tela.
+3. Criar um modal de teclado numérico simplificado para entrada manual como alternativa ao desenho.
+4. Garantir que o uso do teclado também dispare o fluxo de conclusão do exercício.

@@ -1,0 +1,6 @@
+# Regras de Contexto do Projeto
+
+1. **Memória de Longo Prazo:** Sempre consulte o arquivo `MEMORY.md` no início de cada tarefa para entender o estado atual e os objetivos.
+2. **Atualização de Progresso:** Ao finalizar uma tarefa, atualize as seções "O Que Já Foi Feito" e "O Que Falta Fazer" no `MEMORY.md`.
+3. **Padrão de Execução:** O comando principal para testar e rodar o ambiente de desenvolvimento é `npm run dev`. Sempre valide as mudanças usando este comando antes de considerar uma tarefa concluída.
+4. **Documentação de Pastas:** Se você criar novos arquivos ou pastas (especialmente em `/agents`), atualize a "Estrutura de Diretórios" no `MEMORY.md`.

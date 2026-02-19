@@ -1,5 +1,8 @@
 {
   "compilerOptions": {
+    "paths": {
+      "@/*": ["src/*"]
+    },
     /* Strict Type-Checking — Segurança para público infantil */
     "strict": true,
     "noImplicitAny": true,

@@ -15,3 +15,11 @@ export type { ContainerProps } from './Container';
 
 export { Heading } from './Heading';
 export type { HeadingProps } from './Heading';
+
+export { LoadingScreen } from './LoadingScreen';
+
+export { OCRConfirmationOverlay } from './OCRConfirmationOverlay';
+export { OCRRetryOverlay } from './OCRRetryOverlay';
+export { OCRFeedbackOverlay } from './OCRFeedbackOverlay';
+export { NumericKeypadOverlay } from './NumericKeypadOverlay';
+export { FloatingKeypadButton } from './FloatingKeypadButton';
