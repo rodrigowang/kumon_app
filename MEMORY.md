@@ -1,347 +1,118 @@
-# 🧠 Memória do Projeto
+# Memória do Projeto — Kumon Math App
 
-## 1. Objetivo Geral
+## O Que É
 
-**Kumon Math App** é um aplicativo web educacional para crianças de 7 anos aprenderem matemática (estilo método Kumon) usando **escrita à mão como input principal**. O sistema utiliza OCR (Reconhecimento Óptico de Caracteres) com TensorFlow.js para reconhecer dígitos desenhados pela criança em um canvas touch-friendly, oferecendo feedback pedagógico adequado à faixa etária.
-
-**Problema que resolve**: Proporciona experiência de aprendizado interativa, autônoma e encorajadora, onde a criança pratica matemática de forma natural (escrevendo à mão), sem depender de digitação ou teclado numérico.
+App web educacional para crianças de 7 anos aprenderem matemática (método Kumon). A criança escreve a resposta à mão num canvas touch e o sistema reconhece via OCR (TensorFlow.js). Conforme acerta, a dificuldade aumenta automaticamente.
 
 ---
 
-## 2. Estrutura de Diretórios
+## Stack
 
-```
-kumon-app/
-├── .agents/                      # Comunicação entre agentes (EdTech, Dev, QA)
-│   ├── current-task.md           # Task em andamento
-│   ├── dev-output.md             # Log de arquivos criados/modificados pelo Dev
-│   ├── specs/                    # Especificações pedagógicas (EdTech escreve)
-│   ├── reviews/                  # Revisões de features (EdTech valida)
-│   └── qa/                       # Relatórios de testes (QA escreve)
-│
-├── .claude/                      # Configuração de agentes e skills
-│   └── skills/                   # Skills especializadas
-│       ├── senior-opensource-dev/   # Dev: implementação e bibliotecas
-│       ├── edtech-specialist/       # EdTech: pedagogia e requisitos
-│       └── child-qa-tester/         # QA: testes focados em crianças
-│
-├── public/
-│   └── models/mnist/             # Modelo CNN pré-treinado para OCR (TensorFlow.js)
-│       ├── model.json
-│       └── group1-shard*.bin     # Pesos do modelo (~4.8MB, ~99% acurácia)
-│
-├── src/
-│   ├── components/
-│   │   ├── canvas/               # DrawingCanvas.tsx (canvas touch com perfect-freehand)
-│   │   ├── exercises/            # ExerciseScreen.tsx (tela de exercícios)
-│   │   ├── ui/                   # Componentes UI (Overlays OCR, Keypad, etc.)
-│   │   └── dev/                  # Testers de desenvolvimento
-│   │
-│   ├── hooks/
-│   │   ├── useOCRModel.ts        # Carrega e aquece modelo TensorFlow.js
-│   │   ├── useDrawingCanvas.ts   # Lógica do canvas (desenho, clear, export)
-│   │   └── useSound.ts           # Feedback sonoro (Howler.js)
-│   │
-│   ├── stores/                   # Estado global (Zustand)
-│   │   ├── useGameStore.ts       # Estado do jogo (exercícios, OCR, tentativas)
-│   │   ├── useProgressStore.ts   # Progresso da criança
-│   │   └── useSettingsStore.ts   # Configurações (som, etc.)
-│   │
-│   ├── utils/ocr/                # Pipeline OCR
-│   │   ├── predict.ts            # Inferência TensorFlow.js
-│   │   ├── tensorOps.ts          # Conversão canvas → Tensor4D [1,28,28,1]
-│   │   ├── segment.ts            # Segmentação de dígitos (multi-dígito no futuro)
-│   │   └── imageProcessing.ts    # Pré-processamento (crop, resize, threshold)
-│   │
-│   └── theme/mantine.ts          # Tema Mantine (UI framework)
-│
-├── tests/
-│   ├── unit/                     # Testes unitários (Vitest)
-│   └── e2e/                      # Testes E2E (Playwright + Chromium)
-│
-├── scripts/orchestrate.sh        # Orquestrador multi-agente (EdTech → Dev → QA)
-├── CLAUDE.md                     # Instruções para agentes Claude
-└── package.json                  # Dependências e scripts
-```
+| Camada | Tecnologia |
+|--------|-----------|
+| UI | React 18 + TypeScript 5 + Vite |
+| Componentes | Mantine v7 (tema custom, fontes grandes, touch ≥48px) |
+| Estado | Zustand (3 stores: Game, Progress, Settings) |
+| Canvas | perfect-freehand (traço suave) |
+| OCR | TensorFlow.js + CNN MNIST (~99% acurácia) |
+| Som | Howler.js + Web Audio API (sons sintéticos) |
+| Testes | Vitest (unit) + Playwright (e2e) |
+| Deploy | PWA (vite-plugin-pwa configurado, não ativado) |
 
 ---
 
-## 3. Arquitetura e Agentes
+## O Que Já Está Implementado
 
-### Sistema Multi-Agente
+### Infraestrutura
+- Vite + React 18 + TS strict, ESLint, Prettier
+- Tema Mantine para crianças (cores vibrantes, Nunito, tokens CSS)
+- 3 stores Zustand: `useGameStore` (OCR status, feedback), `useProgressStore` (histórico, estrelas — sem actions), `useSettingsStore` (volume, som — sem actions)
+- Navegação por estado React (`currentView` no App.tsx), sem React Router
+- Pasta `src/pages/` existe mas está vazia
 
-O projeto utiliza **3 agentes especializados** que colaboram via arquivos markdown em `.agents/`:
+### Canvas de Desenho
+- `DrawingCanvas.tsx` — touch/mouse, perfect-freehand, DPR scaling
+- Expõe via ref: `clear()`, `isEmpty()`, `getImageData()`, `getCanvasElement()`
 
-| Agente | Skill | Responsabilidade |
-|--------|-------|------------------|
-| **EdTech Specialist** | `.claude/skills/edtech-specialist/` | Define requisitos pedagógicos, valida se features atendem necessidades de crianças de 7 anos, aprova/veta decisões de UX. **Autoridade final sobre aspectos pedagógicos.** |
-| **Senior Dev** | `.claude/skills/senior-opensource-dev/` | Implementa features, integra bibliotecas open source, escreve código TypeScript. Filosofia: "importar > escrever do zero". |
-| **QA Child Tester** | `.claude/skills/child-qa-tester/` | Testa do ponto de vista infantil, gera cenários de uso imprevisível (rabiscos, toques repetidos, canvas vazio), valida critérios de aceitação. |
+### Pipeline OCR Completo
+- **Modelo**: CNN pré-treinado do [SciSharp/Keras.NET](https://github.com/SciSharp/Keras.NET/tree/master/Examples/Keras.Playground/wwwroot/MNIST) — Conv2D×2 + MaxPool + Dense, ~600K params, 4.6MB, input `[1,28,28,1]`
+- **Módulos**: `imageProcessing.ts` → `tensorOps.ts` → `segment.ts` → `predict.ts`
+- **Fluxo**: canvas → segmentDigits → predictNumber → `{number, status, confidence, digits}`
+- **3 status**: accepted (≥80%), confirmation (50-79%), retry (<50%)
+- **Hook**: `useOCRModel()` — carrega modelo, warmup, gerencia loading/error
 
-### Fluxo de Trabalho
+### Overlays OCR
+- `OCRConfirmationOverlay` — "Você escreveu X?" (✓/✗)
+- `OCRRetryOverlay` — "Tente desenhar novamente"
+- `OCRFeedbackOverlay` — wrapper com lógica de decisão
+- `NumericKeypadOverlay` + `FloatingKeypadButton` — fallback teclado
 
-```
-1. EdTech escreve spec em .agents/specs/
-2. Dev implementa e registra em .agents/dev-output.md
-3. QA testa e escreve relatório em .agents/qa/
-4. EdTech revisa em .agents/reviews/ (aprova ou pede ajustes)
-```
+### Motor de Progressão (Kumon + CPA)
+- **Tipos**: `CpaPhase` (concrete/pictorial/abstract), `Operation` (addition/subtraction), `MasteryLevel`, `ExerciseResult`, `Problem`
+- **Gerador**: `generateProblem(level, previousId)` — Small Steps (maxResult: 5→10→15→20), evita repetição
+- **Hesitação**: `HesitationTimer` — classifica: fast (<5s), slow (5-15s), hesitant (>15s), hint inatividade >10s
+- **Maestria**: `MasteryTracker` — circular buffer (últimos 10), regras: 5 fast→advance micro, 5 correct→advance CPA, 3 errors→regress CPA, 10 errors→baseline
+- **Constantes**: `MICROLEVEL_PROGRESSION = {addition: [5,10,15,20], subtraction: [5,10,15,20]}`, `CPA_PROGRESSION = ['concrete','pictorial','abstract']`
 
-### Comunicação entre Agentes
+### Tela de Exercício Abstrato
+- `AbstractExerciseScreen.tsx` — integra gerador + hesitação + OCR real + feedback
+- Aceita `ocrModel` via prop, fallback mockOCR (prompt) se modelo indisponível
+- State machine OCR: idle → processing → accepted/confirmation/retry
+- Streak tracking (consecutiveCorrect, consecutiveErrors)
 
-- **current-task.md**: Task em andamento (lida por todos)
-- **dev-output.md**: Lista de arquivos criados/modificados (Dev → QA/EdTech)
-- **specs/**: Especificações técnicas/pedagógicas (EdTech → Dev)
-- **qa/**: Relatórios de teste (QA → Dev/EdTech)
-- **reviews/**: Revisões finais (EdTech → Dev)
+### FeedbackOverlay Rico
+- `FeedbackOverlay.tsx` — 7 tipos de feedback:
+  - Acerto: correct, correct-after-errors, streak-5, streak-10
+  - Erro: error-gentle (1-2), error-learning (3-4), error-regress (5+)
+- Confetti CSS nativo, animações (bounceIn, shake, emojiPulse, streakGlow)
+- Sons integrados (playCorrect, playWrong, playCelebration)
 
----
+### Som
+- `useSound()` — 4 sons: correct, wrong, celebration, click
+- Sons sintéticos via Web Audio API (`syntheticSounds.ts`)
 
-## 4. Como Executar e Testar
-
-### Instalação
-
-```bash
-npm install
-```
-
-### Desenvolvimento
-
-```bash
-npm run dev
-# Inicia servidor Vite em http://localhost:5173
-# Hot reload habilitado (mudanças refletem automaticamente)
-```
-
-### Build de Produção
-
-```bash
-npm run build
-# TypeScript compila + Vite bundler
-# Output em dist/ (pronto para deploy)
-```
-
-### Preview de Produção
-
-```bash
-npm run preview
-# Serve o build de dist/ localmente para validação
-```
+### Dev/Test
+- 7 testers em `src/components/dev/`: Sound, Canvas, OCR, Exercise, AbstractExercise, OCRFeedback, KeypadFallback
+- `AbstractExerciseTester` — debug panel com nível, stats, última decisão, reset
 
 ### Testes
+- Playwright configurado com Chromium
+- Vitest config existe mas vitest não está em devDependencies
+- Tests unitários manuais do motor de progressão (17/17 passing via tsx)
 
-```bash
-# Testes unitários (Vitest)
-npm run test
+---
 
-# Testes E2E (Playwright com Chromium)
-npm run test:e2e
+## Padrões e Convenções
 
-# Rodar TODOS os testes (unit + e2e)
-npm run test:all
+- **Imports**: relativos (`../../types/progression`) nos arquivos lib (aliases `@/` não funcionam com `tsc` bare)
+- **Imports**: aliases `@/` funcionam no Vite bundler (apps e componentes)
+- **data-testid**: obrigatório em todo componente interativo
+- **Commits**: Dev NÃO commita — lista em `.agents/dev-output.md`, humano commita
+- **npm install**: pode dar EACCES — workaround: implementar nativo ou usar `npx`
+- **TypeScript readonly tuples**: usar `as never` cast em `indexOf`
+- **Erros TS pre-existentes**: OCRFeedbackTester (playSound types), ExerciseScreen (undefined params), predict.ts (tf.tidy typing) — não introduzidos por nós
+
+---
+
+## Estrutura de Diretórios (resumo)
+
+```
+src/
+├── components/
+│   ├── canvas/        DrawingCanvas
+│   ├── exercises/     ExerciseScreen, AbstractExerciseScreen
+│   ├── ui/            Button, Card, Heading, Overlays, FeedbackOverlay, Keypad
+│   └── dev/           7 testers (não produção)
+├── hooks/             useSound, useDrawingCanvas, useOCRModel
+├── lib/
+│   ├── math/          generateProblem
+│   └── progression/   HesitationTimer, MasteryTracker
+├── stores/            useGameStore, useProgressStore, useSettingsStore
+├── types/             progression, problem, hesitation, mastery
+├── utils/ocr/         imageProcessing, tensorOps, segment, predict
+└── theme/             mantine.ts
 ```
 
-### Linting
-
-```bash
-npm run lint
-# ESLint com regras TypeScript, React, JSX a11y
-# Strict mode, zero tolerância a 'any'
-```
-
-### Orquestração Multi-Agente
-
-```bash
-# Pipeline completo: EdTech → Dev → QA
-./scripts/orchestrate.sh <nome-da-feature>
-
-# Invocar agente específico
-./scripts/orchestrate.sh --dev "implementar X"
-./scripts/orchestrate.sh --edtech "validar Y"
-./scripts/orchestrate.sh --qa "testar cenário Z"
-```
-
 ---
 
-## 5. O Que Já Foi Feito
-
-### ✅ Infraestrutura Base (Commits c7c8132 → 833b809)
-- Vite + React 18 + TypeScript 5 configurado
-- Estrutura de pastas (src, tests, .agents, .claude)
-- ESLint + Prettier + TypeScript strict mode
-- Git setup com .gitignore
-
-### ✅ UI Framework (Commit 902e461)
-- **Mantine UI** integrado (componentes acessíveis, touch-friendly)
-- Tema customizado para crianças (cores vibrantes, fontes grandes ≥24px)
-- Touch targets ≥48px garantidos
-- Componentes base: Button, Card, Container, Heading
-
-### ✅ Gerenciamento de Estado (Commit 902e461)
-- **Zustand** configurado (3 stores)
-  - `useGameStore`: exercícios, OCR, tentativas de falha
-  - `useProgressStore`: progresso da criança (acertos, níveis)
-  - `useSettingsStore`: configurações (som, volume)
-
-### ✅ Sistema de Som (Commit 833b809)
-- **Howler.js** integrado
-- Hook `useSound` para feedback sonoro
-- Sons sintéticos (`syntheticSounds.ts`) prontos para uso
-
-### ✅ Canvas de Desenho (Task 1.3 - Semana 1)
-- **DrawingCanvas.tsx** com `perfect-freehand` (traço suave e natural)
-- Hook `useDrawingCanvas` (lógica de desenho, clear, export)
-- **DPR (devicePixelRatio) scaling** implementado (resolve baixa resolução em tablets)
-- Touch-friendly, data-testid presente
-
-### ✅ OCR Pipeline Completo (Tasks 1.4, 1.5, 1.6 - Semana 1)
-- **Modelo CNN pré-treinado MNIST** (~99% acurácia)
-  - **Origem**: [SciSharp/Keras.NET](https://github.com/SciSharp/Keras.NET/tree/master/Examples/Keras.Playground/wwwroot/MNIST)
-  - **Código de treinamento**: [MNIST_CNN.cs](https://github.com/SciSharp/Keras.NET/blob/master/Examples/BasicSamples/MNIST_CNN.cs)
-  - **Gerado com**: Keras v2.2.4 + backend CNTK (Microsoft Cognitive Toolkit)
-  - **Treinamento**: 12 epochs, batch size 128, optimizer Adadelta
-  - **Convertido para TF.js**: TensorFlow.js Converter v1.2.2.1
-  - **Arquitetura**: Conv2D(32)→Conv2D(64)→MaxPool(2×2)→Dropout(0.25)→Flatten→Dense(128)→Dropout(0.5)→Dense(10, Softmax)
-  - **Parâmetros**: ~600K
-  - **Tamanho**: 4.6MB (model.json + 2 weight shards)
-  - **Input**: Tensor4D `[1, 28, 28, 1]` (preserva informação espacial)
-  - **Substituiu**: Modelo Dense antigo (1 camada, ~92% acurácia)
-  - **Localização**: `public/models/mnist/` (hospeado localmente, não CDN)
-- **Hook `useOCRModel`**: carrega modelo, warmup, inferência
-- **Utils OCR completos**:
-  - `tensorOps.ts`: canvas → Tensor4D (resize 28×28, normalização)
-  - `predict.ts`: inferência + confiança (softmax max)
-  - `imageProcessing.ts`: crop, threshold, preprocessing
-  - `segment.ts`: segmentação de dígitos (base para multi-dígito)
-
-### ✅ Feedback OCR com Overlays (Task 1.7.1 - Semana 1)
-- **OCRConfirmationOverlay**: confiança 50-79% → criança confirma (✓/✗)
-- **OCRRetryOverlay**: confiança <50% → "Vamos tentar de novo?"
-- **OCRFeedbackOverlay**: wrapper com lógica de decisão
-- Tom pedagógico: encorajador, nunca punitivo
-- Animações suaves, botões grandes (≥64px)
-
-### ✅ Testes E2E (Commit ba2b229)
-- **Playwright** configurado com Chromium
-- Setup para testes de interação touch/canvas
-- Scripts `test:e2e` e `test:all` prontos
-
-### ✅ Especificações Pedagógicas (EdTech)
-- Specs detalhadas em `.agents/specs/`:
-  - Canvas infra, OCR crop, Layout skeleton, Layout logic, OCR feedback UI
-- Princípios Kumon aplicados: autonomia gradual, feedback diferenciado, redução de carga cognitiva
-
-### ✅ QA Reports (QA Agent)
-- Relatórios em `.agents/qa/`:
-  - Validações de UI framework, Zustand, canvas infra, OCR crop, layout, feedback UI
-- Cenários de teste para criança de 7 anos definidos
-
----
-
-## 6. O Que Falta Fazer (Roadmap)
-
-### 🔵 Em Andamento (Current Task)
-**Task 1.7.2: Fluxo Fallback - Teclado Numérico**
-- Contador de tentativas falhas no `useGameStore`
-- Após 3 falhas OCR consecutivas → exibir ícone de teclado numérico
-- Modal de teclado numérico como alternativa ao desenho
-- Garantir que input manual também dispare fluxo de conclusão
-
-### 🔴 Pendente - Próximas Tasks
-
-#### 📌 Task 1.8: Validação Matemática
-- Receber dígito confirmado do OCR
-- Comparar com resposta esperada do exercício
-- Feedback visual/sonoro (acerto ✅ / erro ❌)
-- Atualizar `useProgressStore` (pontuação, streak)
-
-#### 📌 Task 1.9: Progressão de Exercícios
-- Sistema de níveis (somas simples → compostas)
-- Gerador de exercícios (Task 1.1 incompleto?)
-- Transição automática entre exercícios
-- Tela de conclusão de nível
-
-#### 📌 Task 2.x: Gestão de Progresso
-- Persistência de dados (localStorage ou IndexedDB)
-- Dashboard de progresso (gráficos, estatísticas)
-- Sistema de recompensas (badges, estrelas)
-
-#### 📌 Task 3.x: PWA e Offline
-- `vite-plugin-pwa` configurado mas não ativado
-- Service Worker para cache de assets
-- Funcionar offline após primeira visita
-- Ícones e manifest.json
-
-#### 📌 Task 4.x: Multi-Dígito OCR
-- Segmentação de múltiplos dígitos (`segment.ts` tem base)
-- Reconhecimento de números de 2-3 dígitos
-- Espaçamento entre dígitos (UX)
-
-#### 📌 Task 5.x: Acessibilidade e A11y
-- ARIA labels completos
-- Suporte a navegação por teclado (para tablets com teclado)
-- Contrast ratio validado (WCAG AA)
-- Screen reader friendly (para pais)
-
-#### 📌 Task 6.x: Gamificação Avançada
-- Sons de celebração (acertos em streak)
-- Animações de confete/estrelas
-- Sistema de níveis visuais (medalhas, progressão)
-
----
-
-## 7. Dependências Externas Críticas
-
-### 🧠 Modelo OCR (TensorFlow.js)
-
-| Aspecto | Detalhes |
-|---------|----------|
-| **Fonte** | [SciSharp/Keras.NET](https://github.com/SciSharp/Keras.NET) |
-| **Arquivos** | [Examples/Keras.Playground/wwwroot/MNIST](https://github.com/SciSharp/Keras.NET/tree/master/Examples/Keras.Playground/wwwroot/MNIST) |
-| **Código de Treinamento** | [MNIST_CNN.cs](https://github.com/SciSharp/Keras.NET/blob/master/Examples/BasicSamples/MNIST_CNN.cs) |
-| **Licença** | Apache 2.0 (SciSharp) |
-| **Versão do Modelo** | Keras 2.2.4, CNTK backend |
-| **Conversão** | TensorFlow.js Converter v1.2.2.1 |
-| **Acurácia** | ~99% (MNIST test set, 12 epochs) |
-| **Tamanho** | 4.6MB (3 arquivos) |
-| **Data de Download** | 11/fev/2026 |
-| **Localização Local** | `public/models/mnist/` |
-
-### 📦 Bibliotecas NPM Principais
-
-| Biblioteca | Versão | Propósito |
-|------------|--------|-----------|
-| `@tensorflow/tfjs` | ^4.22.0 | Inferência OCR no browser |
-| `perfect-freehand` | ^1.2.2 | Desenho suave no canvas |
-| `@mantine/core` | ^7.17.8 | Framework UI acessível |
-| `zustand` | ^5.0.11 | State management |
-| `howler` | ^2.2.4 | Feedback sonoro |
-| `react` | ^18.3.1 | UI framework |
-| `@playwright/test` | ^1.58.2 | Testes E2E |
-
----
-
-## 📋 Regras Críticas do Projeto
-
-### Design para Criança de 7 Anos
-- **Touch targets ≥ 48px** (toques imprecisos)
-- **Fonte ≥ 24px** (legibilidade)
-- **Zero dependência de leitura** para navegar (ícones predominam)
-- **Feedback visual + sonoro** em toda interação
-- **Erros tratados com gentileza** (nunca punição)
-
-### Desenvolvimento
-- **TypeScript strict**, zero `any`
-- **Filosofia**: importar bibliotecas > escrever do zero
-- **data-testid** obrigatório em componentes interativos
-- **NÃO fazer git commit** (Dev lista em `.agents/dev-output.md`, humano commita)
-
-### Stack Principal
-- React 18 + TypeScript 5 + Vite
-- Mantine (UI) + Zustand (state) + Howler (sound)
-- TensorFlow.js (OCR) + perfect-freehand (canvas)
-- Vitest (unit) + Playwright (e2e)
-
----
-
-**Instrução Permanente:** Mantenha este arquivo atualizado após cada mudança significativa. Registre decisões arquiteturais, features concluídas e lições aprendidas.
+**Última atualização**: 2026-02-19

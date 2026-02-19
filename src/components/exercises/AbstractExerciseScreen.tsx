@@ -22,16 +22,13 @@ import { generateProblem } from '../../lib/math';
 import { HesitationTimer } from '../../lib/progression';
 import { predictNumber } from '../../utils/ocr/predict';
 import { useSound } from '../../hooks';
-import type { Problem, MasteryLevel, ExerciseResult } from '../../types';
+import { useGameStore } from '../../stores/useGameStore';
+import type { Problem, ExerciseResult } from '../../types';
 
 interface AbstractExerciseScreenProps {
-  /** Nível atual de maestria */
-  currentLevel: MasteryLevel;
   /** Modelo OCR carregado (de useOCRModel) */
   ocrModel?: tf.LayersModel | null;
-  /** Callback ao submeter exercício (com resultado) */
-  onSubmitExercise?: (result: ExerciseResult) => void;
-  /** Callback quando exercício for validado (correto/incorreto) */
+  /** Callback quando exercício for validado (correto/incorreto) - opcional para compatibilidade */
   onValidated?: (correct: boolean, userAnswer: number, correctAnswer: number) => void;
   /** Simulação de OCR (para desenvolvimento sem modelo) */
   mockOCR?: boolean;
@@ -98,12 +95,13 @@ function getFeedbackMessage(type: FeedbackType, correctAnswer: number): { messag
 }
 
 export default function AbstractExerciseScreen({
-  currentLevel,
   ocrModel,
-  onSubmitExercise,
   onValidated,
   mockOCR = false,
 }: AbstractExerciseScreenProps) {
+  // Estado global da store
+  const currentLevel = useGameStore((state) => state.currentLevel);
+  const submitExercise = useGameStore((state) => state.submitExercise);
   const canvasRef = useRef<DrawingCanvasHandle>(null);
   const timerRef = useRef(new HesitationTimer());
 
@@ -141,10 +139,12 @@ export default function AbstractExerciseScreen({
     // Iniciar timer de hesitação
     timerRef.current.start();
 
-    // Reset estado
+    // Reset estado completo (incluindo canvas visual)
+    canvasRef.current?.clear();
     setHasDrawing(false);
     setOcrState({ phase: 'idle' });
     setFeedbackVisible(false);
+    pendingHesitationRef.current = null;
   }, [currentLevel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDrawingChange = useCallback((hasContent: boolean) => {
@@ -227,9 +227,12 @@ export default function AbstractExerciseScreen({
       timestamp: Date.now(),
     };
 
-    onSubmitExercise?.(exerciseResult);
+    // Submeter para a store (progressão automática)
+    submitExercise(exerciseResult);
+
+    // Callback opcional para compatibilidade
     onValidated?.(correct, userAnswer, currentProblem.correctAnswer);
-  }, [currentProblem, consecutiveCorrect, consecutiveErrors, hadErrorsInSession, playCorrect, playWrong, playCelebration, onSubmitExercise, onValidated]);
+  }, [currentProblem, consecutiveCorrect, consecutiveErrors, hadErrorsInSession, playCorrect, playWrong, playCelebration, submitExercise, onValidated]);
 
   /**
    * Avança para o próximo problema (chamado quando feedback fecha)

@@ -1,15 +1,14 @@
 /**
  * Tester: Abstract Exercise Screen
  *
- * Demonstração completa da tela de exercício abstrata com motor de progressão
+ * Demonstração completa da tela de exercício abstrata com motor de progressão.
+ * Agora lê estado diretamente da useGameStore (sem duplicação).
  */
 
-import { useState } from 'react';
 import { Box, Button, Stack, Text, Group, Badge } from '@mantine/core';
 import * as tf from '@tensorflow/tfjs';
 import AbstractExerciseScreen from '../exercises/AbstractExerciseScreen';
-import { MasteryTracker } from '../../lib/progression';
-import type { MasteryLevel, ExerciseResult } from '../../types';
+import { useGameStore } from '../../stores/useGameStore';
 
 interface AbstractExerciseTesterProps {
   onBack?: () => void;
@@ -18,80 +17,11 @@ interface AbstractExerciseTesterProps {
 }
 
 export default function AbstractExerciseTester({ onBack, ocrModel }: AbstractExerciseTesterProps) {
-  const [currentLevel, setCurrentLevel] = useState<MasteryLevel>({
-    operation: 'addition',
-    maxResult: 5,
-    cpaPhase: 'abstract',
-  });
-
-  const [tracker] = useState(
-    () => new MasteryTracker(currentLevel)
-  );
-
-  const [stats, setStats] = useState({
-    totalExercises: 0,
-    correct: 0,
-    incorrect: 0,
-    fastCount: 0,
-    slowCount: 0,
-    hesitantCount: 0,
-  });
-
-  const [lastDecision, setLastDecision] = useState<string>('maintain');
-
-  const handleSubmitExercise = (result: ExerciseResult) => {
-    // Adicionar resultado ao tracker
-    tracker.addResult(result);
-
-    // Analisar progressão
-    const analysis = tracker.analyze();
-
-    // Atualizar estatísticas
-    setStats((prev) => ({
-      totalExercises: prev.totalExercises + 1,
-      correct: prev.correct + (result.correct ? 1 : 0),
-      incorrect: prev.incorrect + (result.correct ? 0 : 1),
-      fastCount: prev.fastCount + (result.speed === 'fast' ? 1 : 0),
-      slowCount: prev.slowCount + (result.speed === 'slow' ? 1 : 0),
-      hesitantCount: prev.hesitantCount + (result.speed === 'hesitant' ? 1 : 0),
-    }));
-
-    setLastDecision(analysis.decision);
-
-    // Aplicar decisão de progressão
-    if (analysis.decision !== 'maintain' && analysis.newLevel) {
-      console.log('📈 Mudança de nível:', analysis.decision);
-      console.log('  Anterior:', currentLevel);
-      console.log('  Novo:', analysis.newLevel);
-      console.log('  Motivo:', analysis.reason);
-
-      tracker.updateLevel(analysis.newLevel);
-      setCurrentLevel(analysis.newLevel);
-    }
-  };
-
-  const handleReset = () => {
-    const initialLevel: MasteryLevel = {
-      operation: 'addition',
-      maxResult: 5,
-      cpaPhase: 'abstract',
-    };
-
-    tracker.clearResults();
-    tracker.updateLevel(initialLevel);
-    setCurrentLevel(initialLevel);
-
-    setStats({
-      totalExercises: 0,
-      correct: 0,
-      incorrect: 0,
-      fastCount: 0,
-      slowCount: 0,
-      hesitantCount: 0,
-    });
-
-    setLastDecision('maintain');
-  };
+  // Ler estado diretamente da store
+  const currentLevel = useGameStore((state) => state.currentLevel);
+  const stats = useGameStore((state) => state.sessionStats);
+  const lastDecision = useGameStore((state) => state.lastProgressionDecision);
+  const resetProgress = useGameStore((state) => state.resetProgress);
 
   return (
     <Box style={{ position: 'relative', width: '100vw', height: '100vh' }}>
@@ -174,7 +104,7 @@ export default function AbstractExerciseTester({ onBack, ocrModel }: AbstractExe
               size="xs"
               variant="outline"
               color="red"
-              onClick={handleReset}
+              onClick={resetProgress}
             >
               🔄 Reset
             </Button>
@@ -188,14 +118,13 @@ export default function AbstractExerciseTester({ onBack, ocrModel }: AbstractExe
               >
                 ← Voltar
               </Button>
-            )}</Group>
+            )}
+          </Group>
         </Stack>
       </Box>
 
       {/* Tela de Exercício */}
       <AbstractExerciseScreen
-        currentLevel={currentLevel}
-        onSubmitExercise={handleSubmitExercise}
         ocrModel={ocrModel}
         mockOCR={!ocrModel}
       />

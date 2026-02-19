@@ -1,3 +1,127 @@
+# Dev Output — MasteryTracker na Store (Sprint 1.1)
+
+**Data**: 2026-02-19
+**Task**: Migrar MasteryTracker do AbstractExerciseTester para useGameStore
+**Status**: ✅ Implementado
+
+---
+
+## TL;DR
+
+O MasteryTracker agora vive no `useGameStore` (Zustand), tornando-se o estado real do app. O `AbstractExerciseScreen` lê `currentLevel` da store e chama `submitExercise(result)` que automaticamente atualiza o nível. Removida duplicação de lógica no `AbstractExerciseTester`.
+
+---
+
+## Arquivos Modificados
+
+### 1. `src/stores/useGameStore.ts` — Estado de progressão adicionado
+
+**Novo estado:**
+- `currentLevel: MasteryLevel` — nível atual (operation, maxResult, cpaPhase)
+- `masteryTracker: MasteryTracker` — instância do tracker
+- `sessionStats: { totalExercises, correct, incorrect, fastCount, slowCount, hesitantCount }`
+- `lastProgressionDecision: string` — última decisão (maintain/advance/regress)
+
+**Novas actions:**
+- `submitExercise(result: ExerciseResult)` — adiciona resultado, analisa progressão, atualiza nível automaticamente
+- `resetProgress()` — volta ao nível inicial (debug)
+
+**Nível inicial:**
+```typescript
+const INITIAL_LEVEL: MasteryLevel = {
+  operation: 'addition',
+  maxResult: 5,
+  cpaPhase: 'abstract',
+};
+```
+
+**Lógica de submitExercise:**
+1. `tracker.addResult(result)`
+2. `analysis = tracker.analyze()`
+3. Atualiza stats da sessão
+4. Se `analysis.decision !== 'maintain'` → atualiza `currentLevel` e loga mudança
+
+### 2. `src/components/exercises/AbstractExerciseScreen.tsx` — Conectado à store
+
+**Props removidas:**
+- `currentLevel` (agora lê da store)
+- `onSubmitExercise` (agora chama `submitExercise` da store)
+
+**Props mantidas:**
+- `ocrModel` (necessário para OCR)
+- `onValidated` (callback opcional para compatibilidade)
+- `mockOCR` (fallback sem modelo)
+
+**Mudança principal:**
+```typescript
+// Antes
+interface Props {
+  currentLevel: MasteryLevel;
+  onSubmitExercise?: (result) => void;
+}
+
+// Depois
+const currentLevel = useGameStore(state => state.currentLevel);
+const submitExercise = useGameStore(state => state.submitExercise);
+
+// Em processResult():
+submitExercise(exerciseResult); // Store cuida da progressão
+```
+
+### 3. `src/components/dev/AbstractExerciseTester.tsx` — Simplificado (reescrito)
+
+**Antes**: Mantinha `MasteryTracker` local + stats locais + callbacks duplicados
+
+**Depois**: Lê tudo da store:
+```typescript
+const currentLevel = useGameStore(state => state.currentLevel);
+const stats = useGameStore(state => state.sessionStats);
+const lastDecision = useGameStore(state => state.lastProgressionDecision);
+const resetProgress = useGameStore(state => state.resetProgress);
+```
+
+**Linhas de código**: 200 → 128 (36% redução)
+
+---
+
+## Fluxo Completo de Progressão
+
+```
+1. Criança resolve exercício no AbstractExerciseScreen
+2. OCR reconhece resposta (ou mock/keypad)
+3. processResult() cria ExerciseResult { correct, speed, timeMs, attempts }
+4. submitExercise(result) chamado → vai para store
+5. Store:
+   a. tracker.addResult(result)
+   b. analysis = tracker.analyze()
+   c. Atualiza sessionStats
+   d. Se mudança de nível → tracker.updateLevel() + set currentLevel
+6. React re-renderiza AbstractExerciseScreen com novo nível
+7. Próximo problema gerado automaticamente com nova dificuldade
+```
+
+---
+
+## Benefícios
+
+1. **Single source of truth**: Nível e stats vivem na store, não duplicados
+2. **Progressão automática**: Não precisa passar callbacks, a store cuida
+3. **Debug panel simplificado**: Lê diretamente da store
+4. **Preparado para persistência**: Fácil adicionar `persist` middleware na Sprint 1.3
+
+---
+
+## Teste Manual
+
+1. `npm run dev` → abrir http://localhost:5173
+2. Clicar "Abrir Tela de Exercício"
+3. Resolver 5 exercícios corretamente (rápido <5s cada)
+4. Observar no debug panel: `lastDecision` muda para `advance_microlevel`
+5. `maxResult` no badge muda de 5 para 10
+6. Próximos problemas são mais difíceis (ex: 7+3, 6+4)
+
+---
+
 # Dev Output — OCR Real + FeedbackOverlay (3.2)
 
 **Data**: 2026-02-19

@@ -1,4 +1,4 @@
-import { Box, Text, Button, Overlay } from '@mantine/core';
+import { Box, Text, Button } from '@mantine/core';
 import { useEffect } from 'react';
 
 interface OCRRetryOverlayProps {
@@ -9,8 +9,8 @@ interface OCRRetryOverlayProps {
 /**
  * Overlay de Reescrita (<50% confiança) - VERSÃO SIMPLIFICADA
  *
- * Esta versão usa emojis/Unicode ao invés de ícones do Tabler
- * Use esta versão se ainda não instalou @tabler/icons-react
+ * Pede para a criança tentar desenhar novamente.
+ * Botão grande "Tentar Novamente".
  */
 export const OCRRetryOverlay: React.FC<OCRRetryOverlayProps> = ({
   onRetry,
@@ -31,23 +31,15 @@ export const OCRRetryOverlay: React.FC<OCRRetryOverlayProps> = ({
         bottom: 0,
         zIndex: 10,
         animation: 'fadeIn 200ms ease-in',
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        backdropFilter: 'blur(2px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
       }}
     >
-      <Overlay
-        opacity={0.7}
-        color="#000"
-        blur={2}
-        style={{
-          borderRadius: '12px',
-        }}
-      />
-
       <Box
         style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
           textAlign: 'center',
           width: '90%',
           maxWidth: '400px',
@@ -121,17 +113,6 @@ export const OCRRetryOverlay: React.FC<OCRRetryOverlayProps> = ({
             justifyContent: 'center',
             gap: '8px',
           }}
-          styles={{
-            root: {
-              '&:hover': {
-                backgroundColor: '#1976D2',
-                transform: 'scale(1.05)',
-              },
-              '&:active': {
-                transform: 'scale(0.95)',
-              },
-            },
-          }}
         >
           <span style={{ fontSize: '32px' }}>🔄</span>
           Tentar Novamente
@@ -141,12 +122,8 @@ export const OCRRetryOverlay: React.FC<OCRRetryOverlayProps> = ({
       <style>
         {`
           @keyframes fadeIn {
-            from {
-              opacity: 0;
-            }
-            to {
-              opacity: 1;
-            }
+            from { opacity: 0; }
+            to { opacity: 1; }
           }
         `}
       </style>
