@@ -1,118 +1,102 @@
-# Memória do Projeto — Kumon Math App
+# Kumon Math App — Memória Persistente
 
-## O Que É
+## Projeto
+App web educacional (React 18 + TS + Vite + Mantine + Zustand + TensorFlow.js) para crianças de 7 anos aprenderem matemática escrevendo à mão. OCR reconhece dígitos, progressão automática estilo Kumon.
 
-App web educacional para crianças de 7 anos aprenderem matemática (método Kumon). A criança escreve a resposta à mão num canvas touch e o sistema reconhece via OCR (TensorFlow.js). Conforme acerta, a dificuldade aumenta automaticamente.
+## Arquivos Chave
+- `MEMORY.md` (raiz): resumo completo do que foi implementado
+- `.agents/NEXT-STEPS.md`: sprint de próximos passos
+- `.agents/dev-output.md`: log de alterações
+- `CLAUDE.md`: regras globais do projeto
 
----
-
-## Stack
-
-| Camada | Tecnologia |
-|--------|-----------|
-| UI | React 18 + TypeScript 5 + Vite |
-| Componentes | Mantine v7 (tema custom, fontes grandes, touch ≥48px) |
-| Estado | Zustand (3 stores: Game, Progress, Settings) |
-| Canvas | perfect-freehand (traço suave) |
-| OCR | TensorFlow.js + CNN MNIST (~99% acurácia) |
-| Som | Howler.js + Web Audio API (sons sintéticos) |
-| Testes | Vitest (unit) + Playwright (e2e) |
-| Deploy | PWA (vite-plugin-pwa configurado, não ativado) |
-
----
-
-## O Que Já Está Implementado
-
-### Infraestrutura
-- Vite + React 18 + TS strict, ESLint, Prettier
-- Tema Mantine para crianças (cores vibrantes, Nunito, tokens CSS)
-- 3 stores Zustand: `useGameStore` (OCR status, feedback), `useProgressStore` (histórico, estrelas — sem actions), `useSettingsStore` (volume, som — sem actions)
-- Navegação por estado React (`currentView` no App.tsx), sem React Router
-- Pasta `src/pages/` existe mas está vazia
-
-### Canvas de Desenho
-- `DrawingCanvas.tsx` — touch/mouse, perfect-freehand, DPR scaling
-- Expõe via ref: `clear()`, `isEmpty()`, `getImageData()`, `getCanvasElement()`
-
-### Pipeline OCR Completo
-- **Modelo**: CNN pré-treinado do [SciSharp/Keras.NET](https://github.com/SciSharp/Keras.NET/tree/master/Examples/Keras.Playground/wwwroot/MNIST) — Conv2D×2 + MaxPool + Dense, ~600K params, 4.6MB, input `[1,28,28,1]`
-- **Módulos**: `imageProcessing.ts` → `tensorOps.ts` → `segment.ts` → `predict.ts`
-- **Fluxo**: canvas → segmentDigits → predictNumber → `{number, status, confidence, digits}`
-- **3 status**: accepted (≥80%), confirmation (50-79%), retry (<50%)
-- **Hook**: `useOCRModel()` — carrega modelo, warmup, gerencia loading/error
-
-### Overlays OCR
-- `OCRConfirmationOverlay` — "Você escreveu X?" (✓/✗)
-- `OCRRetryOverlay` — "Tente desenhar novamente"
-- `OCRFeedbackOverlay` — wrapper com lógica de decisão
-- `NumericKeypadOverlay` + `FloatingKeypadButton` — fallback teclado
-
-### Motor de Progressão (Kumon + CPA)
-- **Tipos**: `CpaPhase` (concrete/pictorial/abstract), `Operation` (addition/subtraction), `MasteryLevel`, `ExerciseResult`, `Problem`
-- **Gerador**: `generateProblem(level, previousId)` — Small Steps (maxResult: 5→10→15→20), evita repetição
-- **Hesitação**: `HesitationTimer` — classifica: fast (<5s), slow (5-15s), hesitant (>15s), hint inatividade >10s
-- **Maestria**: `MasteryTracker` — circular buffer (últimos 10), regras: 5 fast→advance micro, 5 correct→advance CPA, 3 errors→regress CPA, 10 errors→baseline
-- **Constantes**: `MICROLEVEL_PROGRESSION = {addition: [5,10,15,20], subtraction: [5,10,15,20]}`, `CPA_PROGRESSION = ['concrete','pictorial','abstract']`
-
-### Tela de Exercício Abstrato
-- `AbstractExerciseScreen.tsx` — integra gerador + hesitação + OCR real + feedback
-- Aceita `ocrModel` via prop, fallback mockOCR (prompt) se modelo indisponível
-- State machine OCR: idle → processing → accepted/confirmation/retry
-- Streak tracking (consecutiveCorrect, consecutiveErrors)
-
-### FeedbackOverlay Rico
-- `FeedbackOverlay.tsx` — 7 tipos de feedback:
-  - Acerto: correct, correct-after-errors, streak-5, streak-10
-  - Erro: error-gentle (1-2), error-learning (3-4), error-regress (5+)
-- Confetti CSS nativo, animações (bounceIn, shake, emojiPulse, streakGlow)
-- Sons integrados (playCorrect, playWrong, playCelebration)
-
-### Som
-- `useSound()` — 4 sons: correct, wrong, celebration, click
-- Sons sintéticos via Web Audio API (`syntheticSounds.ts`)
-
-### Dev/Test
-- 7 testers em `src/components/dev/`: Sound, Canvas, OCR, Exercise, AbstractExercise, OCRFeedback, KeypadFallback
-- `AbstractExerciseTester` — debug panel com nível, stats, última decisão, reset
-
-### Testes
-- Playwright configurado com Chromium
-- Vitest config existe mas vitest não está em devDependencies
-- Tests unitários manuais do motor de progressão (17/17 passing via tsx)
-
----
-
-## Padrões e Convenções
-
-- **Imports**: relativos (`../../types/progression`) nos arquivos lib (aliases `@/` não funcionam com `tsc` bare)
-- **Imports**: aliases `@/` funcionam no Vite bundler (apps e componentes)
-- **data-testid**: obrigatório em todo componente interativo
-- **Commits**: Dev NÃO commita — lista em `.agents/dev-output.md`, humano commita
-- **npm install**: pode dar EACCES — workaround: implementar nativo ou usar `npx`
+## Padrões Aprendidos
+- **npm install pode falhar** com EACCES — usar `npx` ou implementar nativo
+- **Imports em src/lib/**: usar caminhos relativos (aliases `@/` não funcionam com `tsc` bare)
 - **TypeScript readonly tuples**: usar `as never` cast em `indexOf`
-- **Erros TS pre-existentes**: OCRFeedbackTester (playSound types), ExerciseScreen (undefined params), predict.ts (tf.tidy typing) — não introduzidos por nós
+- **Navegação**: state-based no App.tsx, sem React Router
+- **Vitest**: listado em scripts mas NÃO está em devDependencies
+- **Erros TS pre-existentes**: OCRFeedbackTester, ExerciseScreen, predict.ts — não tocar
+- **Mantine Overlay bug**: `<Overlay>` bloqueia cliques — usar CSS plain `backgroundColor + backdropFilter`
 
----
+## Estado Atual (2026-02-19)
+**Sprint 1 COMPLETA** — Loop principal funcional
 
-## Estrutura de Diretórios (resumo)
+### ✅ O que funciona
+1. **Home Screen** (HomeScreen.tsx)
+   - Botão "Jogar" grande (80px)
+   - Badge de nível atual ("Somas até 5")
+   - Contador de estrelas acumuladas
+   - Link discreto "dev" para dashboard
+   - Link "resetar progresso" com confirmação
 
+2. **Sessões de 10 exercícios**
+   - Indicador visual de progresso (bolinhas + "3 de 10")
+   - Detecção automática de fim de sessão
+   - Tela de resumo (SessionSummaryScreen) com:
+     - Título motivacional (Perfeito/Muito bem/Bom trabalho)
+     - Estrelas ganhas (+1/+2/+3 baseado em accuracy)
+     - Acertos, tempo, barra de % visual
+     - Botões "Jogar de novo" e "Voltar"
+
+3. **Motor de progressão integrado**
+   - MasteryTracker vive no useGameStore (Zustand)
+   - Nível muda automaticamente (5 fast→sobe, 3 erros→desce)
+   - AbstractExerciseScreen lê `currentLevel` da store
+   - `submitExercise(result)` atualiza progressão
+
+4. **OCR real funcionando**
+   - Pipeline: canvas → segmentDigits → predictNumber
+   - 3 status: accepted (≥80%), confirmation (50-79%), retry (<50%)
+   - Overlays clicáveis (fix Mantine Overlay)
+   - Fallback mockOCR quando modelo indisponível
+
+5. **FeedbackOverlay rico**
+   - 7 tipos: correct, correct-after-errors, streak-5, streak-10, error-gentle, error-learning, error-regress
+   - Confetti CSS, animações, sons
+
+6. **Persistência localStorage**
+   - Estado salvo: currentLevel, sessionStats, totalStars, lastSessionSummary
+   - MasteryTracker reconstruído na hidratação
+   - Progresso sobrevive ao recarregar página
+
+7. **Estrelas**
+   - Premiação por sessão completa (não mais por acerto individual)
+   - +1 ★ = completou 10 exercícios
+   - +2 ★ = ≥80% acerto
+   - +3 ★ = 100% acerto
+
+### Stack
+- UI: React 18 + TypeScript 5 + Vite
+- Componentes: Mantine v7 (customizado para crianças)
+- Estado: Zustand (useGameStore principal)
+- Canvas: perfect-freehand
+- OCR: TensorFlow.js + CNN MNIST (~99%)
+- Som: Web Audio API (sintético)
+
+### Estrutura
 ```
 src/
 ├── components/
 │   ├── canvas/        DrawingCanvas
-│   ├── exercises/     ExerciseScreen, AbstractExerciseScreen
-│   ├── ui/            Button, Card, Heading, Overlays, FeedbackOverlay, Keypad
-│   └── dev/           7 testers (não produção)
-├── hooks/             useSound, useDrawingCanvas, useOCRModel
+│   ├── exercises/     AbstractExerciseScreen
+│   ├── screens/       HomeScreen, SessionSummaryScreen
+│   ├── ui/            FeedbackOverlay, OCR overlays, Keypad
+│   └── dev/           Testers (dev dashboard)
+├── hooks/             useSound, useOCRModel
 ├── lib/
 │   ├── math/          generateProblem
 │   └── progression/   HesitationTimer, MasteryTracker
-├── stores/            useGameStore, useProgressStore, useSettingsStore
-├── types/             progression, problem, hesitation, mastery
-├── utils/ocr/         imageProcessing, tensorOps, segment, predict
-└── theme/             mantine.ts
+├── stores/            useGameStore (principal)
+├── types/             progression, problem, mastery
+└── utils/ocr/         pipeline completo
 ```
+
+### Próximo Passo
+**Sprint 2.1** — Badge de nível na tela de exercício
+- Mostrar "Somas até 10" discreto durante exercício
+- Animação quando nível muda ("Novo desafio!")
+- Mensagem gentil se regredir
 
 ---
 
-**Última atualização**: 2026-02-19
+**Última atualização**: 2026-02-19 (Sprint 1.4 concluída)

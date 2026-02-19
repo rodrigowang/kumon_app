@@ -1,3 +1,382 @@
+# Dev Output — Sessão com começo e fim (Sprint 1.4)
+
+**Data**: 2026-02-19
+**Task**: Sessões de 10 exercícios com tela de resumo e estrelas
+**Status**: ✅ Implementado
+
+---
+
+## TL;DR
+
+Implementado sistema de sessões com 10 exercícios cada. Indicador visual de progresso (bolinhas + "3 de 10"). Tela de resumo ao final com acertos, tempo, barra de acerto, e estrelas ganhas (+1 completar, +2 se ≥80%, +3 se 100%). Botões "Jogar de novo" e "Voltar". Estrelas não são mais dadas por acerto individual — apenas no fim da sessão.
+
+---
+
+## Arquivos Criados
+
+### 1. `src/components/screens/SessionSummaryScreen.tsx` — Tela de resumo
+
+**Exibe**:
+- Título motivacional baseado na accuracy (Perfeito! / Muito bem! / Bom trabalho! / Continue tentando!)
+- Estrelas ganhas (★★★ para 100%, ★★ para ≥80%, ★ para completar)
+- Estatísticas: acertos, tempo, nível atual
+- Barra visual de % de acerto (verde/amarelo/laranja)
+- Botões: "Jogar de novo" e "Voltar"
+
+---
+
+## Arquivos Modificados
+
+### 1. `src/stores/useGameStore.ts` — Estado e lógica de sessão
+
+**Novo estado**:
+- `SESSION_SIZE = 10` (constante exportada)
+- `SessionRound`: { isActive, exerciseIndex, correct, incorrect, startTime }
+- `SessionSummary`: { correct, incorrect, total, durationMs, starsEarned, accuracy }
+- `sessionRound` — rastreia sessão atual
+- `lastSessionSummary` — último resumo (persistido)
+
+**Novas actions**:
+- `startSession()` — inicia rodada (reset contadores, marca startTime)
+- `isSessionComplete()` — retorna true se exerciseIndex >= SESSION_SIZE
+- `endSession()` — calcula estrelas, retorna SessionSummary, reseta rodada
+
+**Mudança em `submitExercise`**: Agora incrementa `sessionRound.exerciseIndex/correct/incorrect`. Estrelas NÃO são mais dadas por acerto individual — apenas via `endSession()`.
+
+**Premiação**:
+- Completou sessão: +1 ★
+- ≥80% acerto: +2 ★
+- 100% acerto: +3 ★
+
+### 2. `src/components/exercises/AbstractExerciseScreen.tsx` — Indicador + detecção de fim
+
+**Novo prop**: `onSessionComplete?: () => void`
+**Novo estado lido da store**: `sessionRound`, `isSessionComplete`
+
+**Indicador visual**: Bolinhas de progresso (verde=feito, azul=atual, cinza=pendente) + texto "3 de 10"
+
+**Detecção de fim**: Em `advanceToNext()`, verifica `isSessionComplete()` antes de gerar próximo problema. Se true, chama `onSessionComplete()`.
+
+### 3. `src/components/dev/AbstractExerciseTester.tsx` — Repassa prop + debug
+
+**Novo prop**: `onSessionComplete?: () => void` repassado ao AbstractExerciseScreen
+**Debug panel**: Mostra "Sessão: Ex 3/10 | ✓ 2 | ✗ 1"
+
+### 4. `src/App.tsx` — Fluxo completo
+
+**Nova view**: `'session-summary'` adicionada ao AppView
+**Novo estado**: `sessionSummary: SessionSummary | null`
+
+**Fluxo**:
+```
+Home → "Jogar" → startSession() → exercise view
+  → 10 exercícios → endSession() → session-summary view
+    → "Jogar de novo" → startSession() → exercise view
+    → "Voltar" → home view
+```
+
+### 5. `src/components/screens/index.ts` — Exporta SessionSummaryScreen
+
+---
+
+## Como Testar
+
+```bash
+npm run dev
+# Abrir http://localhost:5173
+```
+
+**Fluxo completo**:
+1. Home mostra 0 ★ e "Somas até 5"
+2. Clicar "Jogar" → exercício aparece com bolinhas (1 de 10)
+3. Resolver exercícios (desenhar ou mock OCR) — bolinhas avançam
+4. No 10º exercício, após fechar o feedback → tela de resumo aparece
+5. Resumo mostra: acertos, tempo, estrelas ganhas
+6. Clicar "Jogar de novo" → nova sessão com bolinhas resetadas
+7. Clicar "Voltar" → Home mostra estrelas acumuladas
+
+**Teste de estrelas**:
+- 10/10 corretas → +3 ★ (100%)
+- 8/10 corretas → +2 ★ (≥80%)
+- 5/10 corretas → +1 ★ (completou)
+
+**Teste de persistência**:
+- Completar sessão → voltar home → recarregar → estrelas mantidas
+
+---
+
+# Dev Output — Persistência localStorage (Sprint 1.3)
+
+**Data**: 2026-02-19
+**Task**: Adicionar persist middleware ao useGameStore para salvar progresso
+**Status**: ✅ Implementado
+
+---
+
+## TL;DR
+
+Estado do jogo agora persiste em localStorage. Nível atual, estrelas, e estatísticas sobrevivem ao recarregar a página. MasteryTracker (instância de classe) é reconstruído na hidratação. Link "resetar progresso" adicionado na HomeScreen com confirmação.
+
+---
+
+## Arquivos Modificados
+
+### 1. `src/stores/useGameStore.ts` — Persist middleware
+
+**Imports adicionados**:
+```typescript
+import { persist, createJSONStorage } from 'zustand/middleware';
+```
+
+**Store wrapped com persist**:
+```typescript
+export const useGameStore = create<GameState & GameActions>()(
+  persist(
+    (set, get) => ({ /* estado e actions */ }),
+    {
+      name: 'kumon-game-storage',
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        currentLevel: state.currentLevel,
+        sessionStats: state.sessionStats,
+        lastProgressionDecision: state.lastProgressionDecision,
+        totalStars: state.totalStars,
+      }),
+      onRehydrateStorage: () => {
+        return (state, error) => {
+          if (state) {
+            // Reconstruir MasteryTracker com nível salvo
+            const tracker = new MasteryTracker(state.currentLevel);
+            state.masteryTracker = tracker;
+          }
+        };
+      },
+    }
+  )
+);
+```
+
+**Campos salvos**:
+- `currentLevel` — nível de maestria (operation, maxResult, cpaPhase)
+- `sessionStats` — total de exercícios, acertos, erros, velocidades
+- `lastProgressionDecision` — última decisão de progressão
+- `totalStars` — estrelas acumuladas
+
+**Campos NÃO salvos** (reconstruídos):
+- `masteryTracker` — reconstruído via `new MasteryTracker(currentLevel)`
+- `ocrStatus`, `ocrFeedbackState`, `ocrFeedbackData` — estado de sessão volátil
+- `currentExercise`, `sessionData` — temporários
+
+**Estratégia de hidratação**:
+1. Zustand carrega dados do localStorage
+2. `onRehydrateStorage` dispara após carregar
+3. `MasteryTracker` é reconstruído com o nível salvo
+4. Histórico de exercícios perdido, mas nível atual preservado
+
+### 2. `src/components/screens/HomeScreen.tsx` — Botão de reset
+
+**Adicionado**:
+- `const resetProgress = useGameStore(state => state.resetProgress)`
+- Handler com confirmação: `window.confirm('Resetar todo o progresso?')`
+- Link discreto "resetar progresso" no rodapé (junto com "dev")
+
+**Lógica**:
+```typescript
+const handleReset = () => {
+  if (window.confirm('Resetar todo o progresso? Isso não pode ser desfeito.')) {
+    resetProgress();
+  }
+};
+```
+
+---
+
+## Como Testar
+
+```bash
+npm run dev
+# Abrir http://localhost:5173
+```
+
+**Teste de persistência**:
+1. Home mostra 0 ★ e "Somas até 5"
+2. Clicar "🎮 Jogar"
+3. Resolver 5 exercícios corretos e rápidos (<5s cada)
+4. Observar mudança de nível: "Somas até 10" no debug panel
+5. Voltar para Home → mostra 5 ★
+6. **Recarregar a página (F5)**
+7. ✅ Home ainda mostra 5 ★ e "Somas até 10"
+8. Abrir DevTools → Application → Local Storage → localhost:5173
+9. Ver chave `kumon-game-storage` com JSON do estado
+
+**Teste de reset**:
+1. Clicar "resetar progresso" (link discreto)
+2. Confirmar no dialog
+3. ✅ Volta para 0 ★ e "Somas até 5"
+4. Recarregar página → estado resetado persiste
+
+---
+
+## localStorage Schema
+
+**Chave**: `kumon-game-storage`
+
+**Valor** (JSON):
+```json
+{
+  "state": {
+    "currentLevel": {
+      "operation": "addition",
+      "maxResult": 10,
+      "cpaPhase": "abstract"
+    },
+    "sessionStats": {
+      "totalExercises": 5,
+      "correct": 5,
+      "incorrect": 0,
+      "fastCount": 5,
+      "slowCount": 0,
+      "hesitantCount": 0
+    },
+    "lastProgressionDecision": "advance_microlevel",
+    "totalStars": 5
+  },
+  "version": 0
+}
+```
+
+---
+
+## Edge Cases Tratados
+
+1. **Primeira carga (sem localStorage)**: Estado inicial padrão aplicado
+2. **localStorage corrompido**: `onRehydrateStorage` loga erro e ignora
+3. **MasteryTracker não serializável**: Reconstruído via `new MasteryTracker(currentLevel)`
+4. **Mudança de estrutura de dados**: Zustand `version` permite migrations futuras
+
+---
+
+## Limitações Conhecidas
+
+- **Histórico de exercícios perdido ao recarregar**: O circular buffer interno do MasteryTracker não é salvo. Só o nível atual persiste. Na próxima sprint (1.4 — sessões), salvaremos histórico explicitamente.
+- **Sem sincronização cross-tab**: Se abrir em 2 abas, cada uma terá estado independente. Última aba a fechar "vence".
+
+---
+
+# Dev Output — HomeScreen + Navegação (Sprint 1.2)
+
+**Data**: 2026-02-19
+**Task**: Criar HomeScreen minimalista e substituir dev dashboard como tela inicial
+**Status**: ✅ Implementado
+
+---
+
+## TL;DR
+
+Interface real para crianças criada. HomeScreen minimalista com botão "Jogar" (≥80px), badge do nível atual ("Somas até 5"), e contador de estrelas acumuladas. Dev dashboard agora acessível via link discreto "dev" na home. Navegação por estado React (`home` | `exercise` | `dev-dashboard`).
+
+---
+
+## Arquivos Criados
+
+### 1. `src/components/screens/HomeScreen.tsx` — Tela inicial
+
+**Elementos visuais**:
+- Título gradiente "✨ Kumon Math" (72px)
+- Subtítulo "Aprenda matemática brincando" (24px)
+- Badge do nível atual com gradiente blue→cyan (ex: "Somas até 5")
+- Contador de estrelas: `{totalStars} ★` (64px)
+- Botão "🎮 Jogar" (80px altura, gradiente verde, sombra)
+- Link discreto "dev" para acessar dashboard (pequeno, embaixo)
+
+**Props**:
+- `onPlay: () => void` — callback ao clicar "Jogar"
+- `onDevDashboard?: () => void` — callback ao clicar link "dev" (opcional)
+
+**Lógica**:
+- Lê `currentLevel` da store → formata como texto amigável
+- Lê `totalStars` da store → mostra com "estrela" ou "estrelas"
+- 100% responsiva, centered layout
+
+### 2. `src/components/screens/index.ts` — Barrel export
+
+---
+
+## Arquivos Modificados
+
+### 1. `src/stores/useGameStore.ts` — Tracking de estrelas
+
+**Estado adicionado**:
+```typescript
+totalStars: number; // Inicializado em 0
+```
+
+**Lógica de incremento** (em `submitExercise`):
+```typescript
+totalStars: state.totalStars + (result.correct ? 1 : 0)
+```
+
+**Reset** (em `resetProgress`):
+```typescript
+totalStars: 0
+```
+
+### 2. `src/App.tsx` — Navegação reestruturada
+
+**Tipo de navegação atualizado**:
+```typescript
+// Antes: 'home' | 'abstract-exercise'
+// Depois: 'home' | 'exercise' | 'dev-dashboard'
+```
+
+**Fluxo de navegação**:
+```
+1. App abre → currentView = 'home' → HomeScreen
+2. Clica "Jogar" → currentView = 'exercise' → AbstractExerciseTester
+3. Clica "← Voltar" → volta para 'home'
+4. Clica "dev" (na home) → currentView = 'dev-dashboard' → Dev Dashboard completo
+5. Clica "← Voltar para Home" → volta para 'home'
+```
+
+**Mudanças visuais no dev dashboard**:
+- Header agora tem "Kumon Math App — Dev Dashboard"
+- Botão "← Voltar para Home" no canto superior direito
+- Mantém todos os testers (Sound, Canvas, OCR, Exercise, Abstract)
+
+---
+
+## Como Testar
+
+```bash
+npm run dev
+# Abrir http://localhost:5173
+```
+
+**Fluxo de teste**:
+1. Tela inicial mostra "✨ Kumon Math" com 0 ★
+2. Badge mostra "Somas até 5" (nível inicial)
+3. Clicar "🎮 Jogar" → vai para exercícios
+4. Resolver 3 exercícios corretos → voltar (botão ← Voltar)
+5. Home agora mostra 3 ★
+6. Clicar "dev" (link discreto) → vai para dev dashboard
+7. Dev dashboard tem botão "← Voltar para Home"
+
+**Estrelas acumulam**: Cada acerto = +1 estrela (persistente na sessão).
+
+---
+
+## Comparação Antes/Depois
+
+| Aspecto | Antes (Sprint 1.1) | Depois (Sprint 1.2) |
+|---------|-------------------|---------------------|
+| Tela inicial | Dev dashboard com testers | HomeScreen minimalista |
+| Acesso a exercícios | Card "Abrir Tela de Exercício" | Botão "🎮 Jogar" (80px) |
+| Progresso visível | Só no debug panel | Badge de nível + estrelas na home |
+| Dev dashboard | Única tela | Acessível via link "dev" |
+| UX para criança | ❌ Confusa, muito texto | ✅ Clara, visual, botão grande |
+
+---
+
 # Dev Output — MasteryTracker na Store (Sprint 1.1)
 
 **Data**: 2026-02-19

@@ -9,20 +9,24 @@ import { useState, useEffect } from 'react'
 import { Stack, Group, Text } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { Button, Card, Container, Heading, LoadingScreen } from './components/ui'
+import { HomeScreen, SessionSummaryScreen } from './components/screens'
 import { SoundTester, CanvasTester, OCRTester, ExerciseTester, AbstractExerciseTester } from './components/dev'
 import { useOCRModel } from './hooks'
 import { useGameStore } from './stores/useGameStore'
 
-type AppView = 'home' | 'abstract-exercise'
+import type { SessionSummary } from './stores/useGameStore'
+
+type AppView = 'home' | 'exercise' | 'dev-dashboard' | 'session-summary'
 
 function App() {
   const [currentView, setCurrentView] = useState<AppView>('home')
   const [count, setCount] = useState(0)
   const [retryKey, setRetryKey] = useState(0)
+  const [sessionSummary, setSessionSummary] = useState<SessionSummary | null>(null)
 
   // Carregar modelo OCR e sincronizar com a store
   const { model, isLoading, error } = useOCRModel()
-  const { setOCRStatus } = useGameStore()
+  const { setOCRStatus, startSession, endSession } = useGameStore()
 
   // Sincronizar status do OCR com a store global
   useEffect(() => {
@@ -73,19 +77,73 @@ function App() {
     )
   }
 
-  // Tela de Exercício Abstrato (fullscreen)
-  if (currentView === 'abstract-exercise') {
-    return <AbstractExerciseTester onBack={() => setCurrentView('home')} ocrModel={model} />
+  // Handler: iniciar sessão de exercícios
+  const handlePlay = () => {
+    startSession()
+    setCurrentView('exercise')
   }
 
-  // App principal (só renderiza quando modelo estiver pronto)
+  // Handler: sessão completa (10 exercícios)
+  const handleSessionComplete = () => {
+    const summary = endSession()
+    setSessionSummary(summary)
+    setCurrentView('session-summary')
+  }
+
+  // Handler: jogar de novo
+  const handlePlayAgain = () => {
+    startSession()
+    setCurrentView('exercise')
+  }
+
+  // Tela de Exercício (fullscreen)
+  if (currentView === 'exercise') {
+    return (
+      <AbstractExerciseTester
+        onBack={() => setCurrentView('home')}
+        ocrModel={model}
+        onSessionComplete={handleSessionComplete}
+      />
+    )
+  }
+
+  // Tela de Resumo da Sessão
+  if (currentView === 'session-summary' && sessionSummary) {
+    return (
+      <SessionSummaryScreen
+        summary={sessionSummary}
+        onPlayAgain={handlePlayAgain}
+        onGoHome={() => setCurrentView('home')}
+      />
+    )
+  }
+
+  // Home Screen (interface real para crianças)
+  if (currentView === 'home') {
+    return (
+      <HomeScreen
+        onPlay={handlePlay}
+        onDevDashboard={() => setCurrentView('dev-dashboard')}
+      />
+    )
+  }
+
+  // Dev Dashboard (só renderiza quando modelo estiver pronto)
   return (
     <Container key={retryKey} size="md" data-testid="main-container" py="xl">
       <Stack gap="xl">
-        {/* Header */}
-        <Heading level={1} data-testid="page-title" ta="center">
-          Kumon Math App
-        </Heading>
+        {/* Header com botão de volta */}
+        <Group justify="space-between" align="center">
+          <Heading level={1} data-testid="page-title">
+            Kumon Math App — Dev Dashboard
+          </Heading>
+          <Button
+            variant="outline"
+            onClick={() => setCurrentView('home')}
+          >
+            ← Voltar para Home
+          </Button>
+        </Group>
 
         {/* Demo Card */}
         <Card data-testid="demo-card">
@@ -173,7 +231,7 @@ function App() {
             </Text>
             <Button
               data-testid="open-abstract-exercise"
-              onClick={() => setCurrentView('abstract-exercise')}
+              onClick={() => setCurrentView('exercise')}
             >
               Abrir Tela de Exercício
             </Button>

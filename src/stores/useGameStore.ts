@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { MasteryTracker } from '../lib/progression';
 import type { MasteryLevel, ExerciseResult } from '../types';
 
@@ -25,6 +26,25 @@ export interface OCRFeedbackData {
   confidence: number;
 }
 
+export const SESSION_SIZE = 10;
+
+export interface SessionRound {
+  isActive: boolean;
+  exerciseIndex: number;
+  correct: number;
+  incorrect: number;
+  startTime: number;
+}
+
+export interface SessionSummary {
+  correct: number;
+  incorrect: number;
+  total: number;
+  durationMs: number;
+  starsEarned: number;
+  accuracy: number;
+}
+
 export interface GameState {
   currentExercise: string | null;
   cpaPhase: CPAPhase;
@@ -39,7 +59,7 @@ export interface GameState {
   currentLevel: MasteryLevel;
   masteryTracker: MasteryTracker;
 
-  // Estatísticas da sessão
+  // Estatísticas globais (acumuladas)
   sessionStats: {
     totalExercises: number;
     correct: number;
@@ -49,6 +69,13 @@ export interface GameState {
     hesitantCount: number;
   };
   lastProgressionDecision: string;
+
+  // Sessão atual (rodada de 10 exercícios)
+  sessionRound: SessionRound;
+  lastSessionSummary: SessionSummary | null;
+
+  // Progresso geral
+  totalStars: number;
 }
 
 interface GameActions {
@@ -61,6 +88,12 @@ interface GameActions {
   // Ações de progressão
   submitExercise: (result: ExerciseResult) => void;
   resetProgress: () => void;
+
+  // Ações de sessão (rodada de 10 exercícios)
+  startSession: () => void;
+  /** Retorna true se a sessão acabou (10 exercícios) */
+  isSessionComplete: () => boolean;
+  endSession: () => SessionSummary;
 }
 
 // Nível inicial (Small Steps — primeiro passo)
@@ -70,8 +103,10 @@ const INITIAL_LEVEL: MasteryLevel = {
   cpaPhase: 'abstract',
 };
 
-// Store
-export const useGameStore = create<GameState & GameActions>((set, get) => ({
+// Store com persistência
+export const useGameStore = create<GameState & GameActions>()(
+  persist(
+    (set, get) => ({
   currentExercise: null,
   cpaPhase: 'concrete',
   level: 1,
@@ -97,6 +132,18 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     hesitantCount: 0,
   },
   lastProgressionDecision: 'maintain',
+
+  // Sessão atual
+  sessionRound: {
+    isActive: false,
+    exerciseIndex: 0,
+    correct: 0,
+    incorrect: 0,
+    startTime: 0,
+  },
+  lastSessionSummary: null,
+
+  totalStars: 0,
 
   // Actions OCR (mantidas)
   setOCRStatus: (status: OCRStatus) => set({ ocrStatus: status }),
@@ -124,7 +171,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     // 2. Analisar progressão
     const analysis = masteryTracker.analyze();
 
-    // 3. Atualizar estatísticas da sessão
+    // 3. Atualizar estatísticas globais + sessão atual
     set((state) => ({
       sessionStats: {
         totalExercises: state.sessionStats.totalExercises + 1,
@@ -135,6 +182,13 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         hesitantCount: state.sessionStats.hesitantCount + (result.speed === 'hesitant' ? 1 : 0),
       },
       lastProgressionDecision: analysis.decision,
+      // Atualizar sessão atual
+      sessionRound: {
+        ...state.sessionRound,
+        exerciseIndex: state.sessionRound.exerciseIndex + 1,
+        correct: state.sessionRound.correct + (result.correct ? 1 : 0),
+        incorrect: state.sessionRound.incorrect + (result.correct ? 0 : 1),
+      },
     }));
 
     // 4. Aplicar decisão de progressão
@@ -153,6 +207,64 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     }
   },
 
+  // Iniciar nova sessão (rodada de 10 exercícios)
+  startSession: () => {
+    set({
+      sessionRound: {
+        isActive: true,
+        exerciseIndex: 0,
+        correct: 0,
+        incorrect: 0,
+        startTime: Date.now(),
+      },
+    });
+  },
+
+  // Verificar se a sessão está completa
+  isSessionComplete: () => {
+    const { sessionRound } = get();
+    return sessionRound.isActive && sessionRound.exerciseIndex >= SESSION_SIZE;
+  },
+
+  // Encerrar sessão e calcular estrelas
+  endSession: () => {
+    const { sessionRound } = get();
+    const total = sessionRound.exerciseIndex;
+    const accuracy = total > 0 ? sessionRound.correct / total : 0;
+    const durationMs = Date.now() - sessionRound.startTime;
+
+    // Premiação: +1 por completar, +2 se ≥80%, +3 se 100%
+    let starsEarned = 1; // completou sessão
+    if (accuracy >= 1) {
+      starsEarned = 3;
+    } else if (accuracy >= 0.8) {
+      starsEarned = 2;
+    }
+
+    const summary: SessionSummary = {
+      correct: sessionRound.correct,
+      incorrect: sessionRound.incorrect,
+      total,
+      durationMs,
+      starsEarned,
+      accuracy,
+    };
+
+    set((state) => ({
+      sessionRound: {
+        isActive: false,
+        exerciseIndex: 0,
+        correct: 0,
+        incorrect: 0,
+        startTime: 0,
+      },
+      lastSessionSummary: summary,
+      totalStars: state.totalStars + starsEarned,
+    }));
+
+    return summary;
+  },
+
   // Resetar progresso (para debug/testes)
   resetProgress: () => {
     const newTracker = new MasteryTracker(INITIAL_LEVEL);
@@ -168,6 +280,45 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         hesitantCount: 0,
       },
       lastProgressionDecision: 'maintain',
+      totalStars: 0,
+      sessionRound: {
+        isActive: false,
+        exerciseIndex: 0,
+        correct: 0,
+        incorrect: 0,
+        startTime: 0,
+      },
+      lastSessionSummary: null,
     });
   },
-}));
+    }),
+    {
+      name: 'kumon-game-storage',
+      storage: createJSONStorage(() => localStorage),
+      // Salvar apenas campos serializáveis (MasteryTracker será reconstruído)
+      partialize: (state) => ({
+        currentLevel: state.currentLevel,
+        sessionStats: state.sessionStats,
+        lastProgressionDecision: state.lastProgressionDecision,
+        totalStars: state.totalStars,
+        lastSessionSummary: state.lastSessionSummary,
+      }),
+      // Reconstruir MasteryTracker após hidratação
+      onRehydrateStorage: () => {
+        return (state, error) => {
+          if (error) {
+            console.error('[useGameStore] Erro ao hidratar:', error);
+            return;
+          }
+
+          if (state) {
+            // Reconstruir tracker com o nível salvo
+            const tracker = new MasteryTracker(state.currentLevel);
+            state.masteryTracker = tracker;
+            console.log('[useGameStore] Estado hidratado com sucesso. Nível:', state.currentLevel);
+          }
+        };
+      },
+    }
+  )
+);

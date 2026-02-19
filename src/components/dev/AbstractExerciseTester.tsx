@@ -14,13 +14,16 @@ interface AbstractExerciseTesterProps {
   onBack?: () => void;
   /** Modelo OCR carregado (opcional — sem ele usa mockOCR) */
   ocrModel?: tf.LayersModel | null;
+  /** Callback quando a sessão de 10 exercícios terminar */
+  onSessionComplete?: () => void;
 }
 
-export default function AbstractExerciseTester({ onBack, ocrModel }: AbstractExerciseTesterProps) {
+export default function AbstractExerciseTester({ onBack, ocrModel, onSessionComplete }: AbstractExerciseTesterProps) {
   // Ler estado diretamente da store
   const currentLevel = useGameStore((state) => state.currentLevel);
   const stats = useGameStore((state) => state.sessionStats);
   const lastDecision = useGameStore((state) => state.lastProgressionDecision);
+  const sessionRound = useGameStore((state) => state.sessionRound);
   const resetProgress = useGameStore((state) => state.resetProgress);
 
   return (
@@ -79,6 +82,18 @@ export default function AbstractExerciseTester({ onBack, ocrModel }: AbstractExe
             </Text>
           </Box>
 
+          {/* Sessão Atual */}
+          {sessionRound.isActive && (
+            <Box>
+              <Text size="xs" c="dimmed">
+                Sessão
+              </Text>
+              <Text size="xs">
+                Ex: {sessionRound.exerciseIndex}/10 | ✓ {sessionRound.correct} | ✗ {sessionRound.incorrect}
+              </Text>
+            </Box>
+          )}
+
           {/* Última Decisão */}
           <Box>
             <Text size="xs" c="dimmed">
@@ -127,6 +142,7 @@ export default function AbstractExerciseTester({ onBack, ocrModel }: AbstractExe
       <AbstractExerciseScreen
         ocrModel={ocrModel}
         mockOCR={!ocrModel}
+        onSessionComplete={onSessionComplete}
       />
     </Box>
   );

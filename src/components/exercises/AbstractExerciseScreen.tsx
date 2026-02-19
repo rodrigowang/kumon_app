@@ -22,7 +22,7 @@ import { generateProblem } from '../../lib/math';
 import { HesitationTimer } from '../../lib/progression';
 import { predictNumber } from '../../utils/ocr/predict';
 import { useSound } from '../../hooks';
-import { useGameStore } from '../../stores/useGameStore';
+import { useGameStore, SESSION_SIZE } from '../../stores/useGameStore';
 import type { Problem, ExerciseResult } from '../../types';
 
 interface AbstractExerciseScreenProps {
@@ -32,6 +32,8 @@ interface AbstractExerciseScreenProps {
   onValidated?: (correct: boolean, userAnswer: number, correctAnswer: number) => void;
   /** Simulação de OCR (para desenvolvimento sem modelo) */
   mockOCR?: boolean;
+  /** Callback quando a sessão de 10 exercícios terminar */
+  onSessionComplete?: () => void;
 }
 
 type OCRState =
@@ -98,10 +100,13 @@ export default function AbstractExerciseScreen({
   ocrModel,
   onValidated,
   mockOCR = false,
+  onSessionComplete,
 }: AbstractExerciseScreenProps) {
   // Estado global da store
   const currentLevel = useGameStore((state) => state.currentLevel);
   const submitExercise = useGameStore((state) => state.submitExercise);
+  const sessionRound = useGameStore((state) => state.sessionRound);
+  const isSessionComplete = useGameStore((state) => state.isSessionComplete);
   const canvasRef = useRef<DrawingCanvasHandle>(null);
   const timerRef = useRef(new HesitationTimer());
 
@@ -240,6 +245,12 @@ export default function AbstractExerciseScreen({
   const advanceToNext = useCallback(() => {
     if (!currentProblem) return;
 
+    // Verificar se sessão acabou (10 exercícios)
+    if (isSessionComplete()) {
+      onSessionComplete?.();
+      return;
+    }
+
     const nextProblem = generateProblem(currentLevel, currentProblem.id);
     setCurrentProblem(nextProblem);
     setPreviousProblemId(nextProblem.id);
@@ -251,7 +262,7 @@ export default function AbstractExerciseScreen({
     pendingHesitationRef.current = null;
 
     timerRef.current.start();
-  }, [currentLevel, currentProblem]);
+  }, [currentLevel, currentProblem, isSessionComplete, onSessionComplete]);
 
   /**
    * Handler do botão "Enviar"
@@ -381,6 +392,8 @@ export default function AbstractExerciseScreen({
         padding: '16px',
         boxSizing: 'border-box',
         position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
       }}
     >
       {/* FeedbackOverlay rico */}
@@ -430,12 +443,52 @@ export default function AbstractExerciseScreen({
         </Box>
       )}
 
+      {/* Indicador de Progresso da Sessão */}
+      {sessionRound.isActive && (
+        <Box
+          data-testid="session-progress"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            marginBottom: '8px',
+          }}
+        >
+          {/* Bolinhas de progresso */}
+          <Flex gap={6} align="center">
+            {Array.from({ length: SESSION_SIZE }, (_, i) => (
+              <Box
+                key={i}
+                style={{
+                  width: '20px',
+                  height: '20px',
+                  borderRadius: '50%',
+                  background:
+                    i < sessionRound.exerciseIndex
+                      ? '#4CAF50' // completado
+                      : i === sessionRound.exerciseIndex
+                      ? '#4A90E2' // atual
+                      : '#E0E0E0', // pendente
+                  border: i === sessionRound.exerciseIndex ? '3px solid #2C6FBF' : 'none',
+                  transition: 'background 0.3s, border 0.3s',
+                }}
+              />
+            ))}
+          </Flex>
+          <Text size="18px" fw={600} c="#4A90E2" style={{ marginLeft: '8px' }}>
+            {sessionRound.exerciseIndex + 1} de {SESSION_SIZE}
+          </Text>
+        </Box>
+      )}
+
       {/* Layout Principal */}
       <Flex
         direction={{ base: 'column', md: 'row' }}
         gap="xl"
         h="100%"
         w="100%"
+        style={{ flex: '1 1 auto' }}
       >
         {/* Painel do Exercício */}
         <Box
