@@ -2,31 +2,44 @@ import { Box, Button, Group, Stack, Text } from '@mantine/core';
 import { useState } from 'react';
 
 interface NumericKeypadOverlayProps {
-  onSubmit: (digit: number) => void;
+  /** Chamado com o número digitado (pode ser multi-dígito) */
+  onSubmit: (number: number) => void;
   onClose: () => void;
   playSound?: (sound: string) => void;
+  /** Limite máximo de dígitos (padrão: 2, suficiente para respostas até 99) */
+  maxDigits?: number;
 }
 
 /**
- * Modal de teclado numérico simplificado (0-9)
- * Fallback para quando OCR falha 3+ vezes
+ * Modal de teclado numérico (0-9, multi-dígito)
+ * Fallback para quando OCR falha 2+ vezes
  *
  * Requisitos:
  * - Botões grandes ≥64px (touch target)
  * - Layout 3x4 (1-9 + clear/0/submit)
  * - Visual infantil (cores, espaçamento)
  * - Som ao tocar botão
+ * - Suporta respostas multi-dígito (ex: 12, 20)
  */
 export function NumericKeypadOverlay({
   onSubmit,
   onClose,
   playSound,
+  maxDigits = 2,
 }: NumericKeypadOverlayProps) {
   const [currentInput, setCurrentInput] = useState<string>('');
 
   const handleNumberClick = (num: number) => {
     playSound?.('tap');
-    setCurrentInput(num.toString());
+    // Append digit (multi-dígito), respeitar limite
+    if (currentInput.length < maxDigits) {
+      setCurrentInput((prev) => prev + num.toString());
+    }
+  };
+
+  const handleBackspace = () => {
+    playSound?.('tap');
+    setCurrentInput((prev) => prev.slice(0, -1));
   };
 
   const handleClear = () => {
@@ -37,9 +50,9 @@ export function NumericKeypadOverlay({
   const handleSubmit = () => {
     if (currentInput !== '') {
       playSound?.('confirm');
-      const digit = parseInt(currentInput, 10);
-      if (!isNaN(digit) && digit >= 0 && digit <= 9) {
-        onSubmit(digit);
+      const value = parseInt(currentInput, 10);
+      if (!isNaN(value)) {
+        onSubmit(value);
       }
     }
   };
@@ -66,7 +79,7 @@ export function NumericKeypadOverlay({
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 1000,
-        animation: 'fadeIn 200ms ease-out',
+        animation: 'keypadFadeIn 200ms ease-out',
       }}
       data-testid="numeric-keypad-overlay"
     >
@@ -98,7 +111,7 @@ export function NumericKeypadOverlay({
               ta="center"
               style={{ lineHeight: 1.3 }}
             >
-              Escreva o número aqui
+              Digite o número
             </Text>
           </Stack>
 
@@ -154,14 +167,14 @@ export function NumericKeypadOverlay({
             </Group>
           </Box>
 
-          {/* Linha de botões: Clear, 0, OK */}
+          {/* Linha de botões: Apagar, 0, OK */}
           <Group gap="md" justify="center" grow>
             <Button
               size="xl"
               variant="outline"
               color="gray.6"
               radius="md"
-              onClick={handleClear}
+              onClick={currentInput.length > 0 ? handleBackspace : handleClear}
               style={{
                 height: '80px',
                 fontSize: '24px',
@@ -169,7 +182,7 @@ export function NumericKeypadOverlay({
               }}
               data-testid="keypad-clear"
             >
-              Limpar
+              {currentInput.length > 1 ? '⌫' : 'Limpar'}
             </Button>
             <Button
               size="xl"
@@ -204,7 +217,7 @@ export function NumericKeypadOverlay({
             </Button>
           </Group>
 
-          {/* Botão Cancelar */}
+          {/* Botão Cancelar (volta para desenho) */}
           <Button
             size="md"
             variant="subtle"
@@ -217,13 +230,13 @@ export function NumericKeypadOverlay({
             }}
             data-testid="keypad-cancel"
           >
-            Cancelar
+            Voltar para desenho
           </Button>
         </Stack>
       </Box>
 
       <style>{`
-        @keyframes fadeIn {
+        @keyframes keypadFadeIn {
           from {
             opacity: 0;
             transform: scale(0.95);

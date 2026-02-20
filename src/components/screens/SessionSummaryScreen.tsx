@@ -5,6 +5,7 @@
  * Design amigável para criança de 7 anos: fontes grandes, cores vibrantes, celebração.
  */
 
+import { useState, useEffect } from 'react';
 import { Stack, Text, Box, Group, Badge } from '@mantine/core';
 import { Button, Container } from '../ui';
 import { useGameStore } from '../../stores/useGameStore';
@@ -50,12 +51,51 @@ export default function SessionSummaryScreen({
 }: SessionSummaryScreenProps) {
   const currentLevel = useGameStore((state) => state.currentLevel);
   const { title, subtitle } = getMotivationalMessage(summary.accuracy);
+  const [isVisible, setIsVisible] = useState(false);
 
   const operationName = currentLevel.operation === 'addition' ? 'Somas' : 'Subtrações';
   const levelText = `${operationName} até ${currentLevel.maxResult}`;
 
+  // Animação de entrada (flip in)
+  useEffect(() => {
+    // Pequeno delay para garantir que a animação seja visível
+    const timer = setTimeout(() => {
+      setIsVisible(true);
+    }, 50);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
-    <Container size="sm" py="xl" data-testid="session-summary-screen">
+    <>
+      {/* CSS de Animação */}
+      <style>
+        {`
+          @keyframes sessionSummaryFlipIn {
+            0% {
+              opacity: 0;
+              transform: perspective(1000px) rotateY(20deg) scale(0.95);
+            }
+            100% {
+              opacity: 1;
+              transform: perspective(1000px) rotateY(0deg) scale(1);
+            }
+          }
+
+          .session-summary-enter {
+            animation: sessionSummaryFlipIn 0.8s ease-out forwards;
+          }
+        `}
+      </style>
+
+      <Container
+        size="sm"
+        py="xl"
+        data-testid="session-summary-screen"
+        className={isVisible ? 'session-summary-enter' : ''}
+        style={{
+          opacity: isVisible ? 1 : 0,
+        }}
+      >
       <Stack gap="xl" align="center" style={{ minHeight: '80vh', justifyContent: 'center' }}>
         {/* Título motivacional */}
         <Box ta="center">
@@ -193,5 +233,6 @@ export default function SessionSummaryScreen({
         </Group>
       </Stack>
     </Container>
+    </>
   );
 }

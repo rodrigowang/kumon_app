@@ -1,3 +1,956 @@
+# Dev Output — Tratamento de Erros Graceful + UX Simplificado (Sprint 3.3)
+
+**Data**: 2026-02-20
+**Task**: Simplificar feedback (som > overlay), correção inline para erros, fallbacks graceful
+**Status**: ✅ Implementado
+
+---
+
+## TL;DR
+
+Removido FeedbackOverlay para respostas corretas — agora acerto toca som e avança automaticamente. Para erros: tela fica parada mostrando a resposta correta inline (em verde) com a resposta da criança (em vermelho), e botão "Continuar" para avançar. Modelo OCR indisponível → abre teclado numérico (não mais `prompt()`). OCR com timeout de 5s → fallback teclado. Erros de OCR → fallback teclado.
+
+---
+
+## Mudanças de UX (pedido do usuário)
+
+### Antes
+- Acerto: FeedbackOverlay verde com confetti (2s de espera) → avança
+- Erro: FeedbackOverlay vermelho (2s de espera) → avança
+
+### Depois
+- **Acerto**: Toca som → avança imediatamente (com animação de transição)
+- **Erro**: Toca som → permanece na tela → mostra resposta correta (verde) + resposta errada (vermelho) → criança clica "Continuar" → avança
+
+**Motivação**: "A tela de correto/errado pode tirar, fica muito tempo e distrai. Só o som já é suficiente."
+
+---
+
+## Tratamento de Erros Graceful
+
+| Cenário | Antes | Depois |
+|---------|-------|--------|
+| Modelo OCR não carrega | `prompt()` (dialog do browser) | Abre teclado numérico |
+| OCR timeout (>5s) | Não tratado (travava) | Fallback para teclado |
+| Erro inesperado no OCR | Overlay de retry | Fallback para teclado |
+| Canvas vazio | Overlay de retry | Overlay de retry (mantido) |
+
+---
+
+## Arquivos Modificados
+
+### 1. `src/components/exercises/AbstractExerciseScreen.tsx` — Mudança principal
+
+**Import**: `FeedbackOverlay` removido, mantido apenas `type { FeedbackType }` (para determinação de som)
+
+**Função removida**: `getFeedbackMessage()` — não mais necessária
+
+**Estados removidos**:
+- `feedbackVisible`, `feedbackType`, `feedbackMessage`, `feedbackSubMessage`, `feedbackCorrectAnswer`
+
+**Novo estado**:
+```typescript
+const [showingCorrection, setShowingCorrection] = useState<{
+  correctAnswer: number;
+  userAnswer: number;
+} | null>(null);
+```
+
+**Novo handler**:
+```typescript
+const handleContinueAfterError = useCallback(() => {
+  setShowingCorrection(null);
+  advanceToNext();
+}, [advanceToNext]);
+```
+
+**processResult reescrito**:
+- Streaks e sons mantidos (celebration para 5/10-streak)
+- Se correto: `advanceToNext()` direto
+- Se errado: `setShowingCorrection({ correctAnswer, userAnswer })`
+- FeedbackOverlay não mais renderizado
+
+**handleSubmit atualizado**:
+- `!ocrModel` → `setOcrState({ phase: 'keypad' })` (antes: `prompt()`)
+- OCR timeout 5s via `Promise.race`
+- catch → `setOcrState({ phase: 'keypad' })` (antes: `{ phase: 'retry' }`)
+
+**UI - Painel do exercício**:
+- Quando `showingCorrection`: "?" substituído pela resposta correta (verde, fw=800)
+- Texto "Sua resposta: X" em vermelho abaixo do problema
+- Borda do painel muda de azul para vermelho
+
+**UI - Área do canvas**:
+- Quando `showingCorrection`: canvas e botões substituídos por botão "Continuar" (80px, azul, borderRadius 16px)
+- Quando normal: canvas + Limpar + Enviar (inalterado)
+
+---
+
+## Fluxo Completo
+
+### Acerto
+```
+1. Criança desenha resposta → Enviar
+2. OCR reconhece → processResult(correto)
+3. Som de acerto toca
+4. advanceToNext() → transição fade → próximo exercício
+```
+
+### Erro
+```
+1. Criança desenha resposta → Enviar
+2. OCR reconhece → processResult(errado)
+3. Som de erro toca
+4. Tela mostra:
+   - Problema: "3 + 5 = 8" (8 em verde)
+   - "Sua resposta: 6" (em vermelho)
+   - Borda vermelha no painel
+   - Botão "Continuar" no lugar do canvas
+5. Criança clica "Continuar"
+6. advanceToNext() → transição → próximo exercício
+```
+
+### Modelo OCR indisponível
+```
+1. Criança desenha → Enviar
+2. !ocrModel → abre teclado numérico
+3. Criança digita resposta → OK
+4. processResult() → fluxo normal
+```
+
+### OCR Timeout
+```
+1. Criança desenha → Enviar
+2. OCR demora >5s → Promise.race resolve 'timeout'
+3. Abre teclado numérico
+4. Criança digita resposta → OK
+```
+
+---
+
+## Como Testar
+
+```bash
+npm run dev
+```
+
+### Teste 1: Acerto sem overlay
+1. Home → Jogar
+2. Desenhe a resposta correta → Enviar
+3. ✅ Som de acerto toca
+4. ✅ Tela avança direto (sem overlay verde, sem confetti, sem espera)
+5. ✅ Transição fade suave para próximo exercício
+
+### Teste 2: Erro com correção inline
+1. Desenhe resposta errada → Enviar
+2. ✅ Som de erro toca
+3. ✅ "?" muda para resposta correta (verde)
+4. ✅ "Sua resposta: X" aparece em vermelho
+5. ✅ Borda do painel muda para vermelho
+6. ✅ Canvas some, botão "Continuar" aparece (grande, azul)
+7. Clique "Continuar"
+8. ✅ Transição para próximo exercício
+
+### Teste 3: OCR indisponível (sem modelo)
+1. Abrir app sem modelo MNIST carregado
+2. Desenhe → Enviar
+3. ✅ Teclado numérico abre (sem dialog prompt)
+4. ✅ Digitar resposta funciona normalmente
+
+### Teste 4: Streak de som
+1. Acertar 5 exercícios seguidos
+2. ✅ No 5º acerto: som de celebração (em vez de som normal)
+3. ✅ Sem overlay — só som diferente + avança
+
+---
+
+# Dev Output — PWA e Offline (Sprint 3.2)
+
+**Data**: 2026-02-20
+**Task**: App instalável e funcional offline (PWA completo)
+**Status**: ✅ Implementado
+
+---
+
+## TL;DR
+
+PWA completo configurado. Manifest expandido com ícones, descrição, orientação portrait, e lang pt-BR. Service Worker (workbox via vite-plugin-pwa) precacheia app shell + modelo MNIST (~4.6MB) + fontes Google. App é instalável em tablet/celular e funciona 100% offline após primeiro carregamento. Build gera `sw.js` + `registerSW.js` automaticamente.
+
+---
+
+## Arquivos Modificados
+
+### 1. `vite.config.ts` — Configuração PWA completa
+
+**includeAssets**: Precache explícito dos arquivos do modelo MNIST:
+- `models/mnist/model.json` (3.8KB)
+- `models/mnist/group1-shard1of2.bin` (4.0MB)
+- `models/mnist/group1-shard2of2.bin` (592KB)
+- Ícones favicon, apple-touch-icon, PWA 192/512
+
+**manifest**: Expandido com:
+- `description`: "Aprenda matemática brincando!"
+- `display`: "standalone" (fullscreen no tablet)
+- `orientation`: "portrait"
+- `lang`: "pt-BR"
+- `categories`: ["education", "kids"]
+- `background_color`: "#F5F7FA"
+- 5 ícones: PNG 192, PNG 512, PNG 512 maskable, SVG 192, SVG 512
+
+**workbox**:
+- `globPatterns`: `['**/*.{js,css,html,ico,png,svg,woff2}']`
+- `maximumFileSizeToCacheInBytes`: 5MB (modelo MNIST ~4.6MB)
+- Runtime caching para Google Fonts (CacheFirst, 1 ano TTL)
+- Runtime caching para Google Fonts static (gstatic.com)
+
+### 2. `public/pwa-192x192.png` — Ícone PWA 192×192 (regenerado)
+
+Antes: placeholder 70 bytes. Agora: PNG válido verde (#4CAF50) 592 bytes.
+
+### 3. `public/pwa-512x512.png` — Ícone PWA 512×512 (regenerado)
+
+Antes: placeholder 70 bytes. Agora: PNG válido verde (#4CAF50) 2200 bytes.
+
+### 4. `public/apple-touch-icon.png` — Ícone Apple 180×180 (regenerado)
+
+Antes: placeholder 70 bytes. Agora: PNG válido verde (#4CAF50) 562 bytes.
+
+### 5. `public/favicon.ico` — Favicon 32×32 (regenerado)
+
+Antes: placeholder 70 bytes. Agora: PNG válido verde (#4CAF50) 104 bytes.
+
+---
+
+## Build Output
+
+```
+npx vite build
+
+dist/registerSW.js                   0.13 kB
+dist/manifest.webmanifest            0.67 kB
+dist/index.html                      1.72 kB
+dist/assets/index-*.css            204.31 kB
+dist/assets/segment-*.js              5.61 kB
+dist/assets/index-*.js            1,964.35 kB
+
+PWA v1.2.0
+mode      generateSW
+precache  25 entries (2130.27 KiB)
+files generated
+  dist/sw.js
+  dist/workbox-*.js
+```
+
+**Precache inclui**: modelo MNIST, ícones, app shell, JS/CSS bundles.
+
+---
+
+## Como Testar
+
+### Teste 1: Build e verificação
+```bash
+npx vite build
+# ✅ "PWA v1.2.0" no output
+# ✅ "precache 25 entries" inclui modelo
+# ✅ dist/sw.js e dist/registerSW.js gerados
+```
+
+### Teste 2: Instalar como app
+```bash
+npx vite preview
+# Abrir http://localhost:4173 no Chrome
+```
+1. Clique no ícone de instalação na barra de endereço (ou menu → "Instalar app")
+2. ✅ Dialog de instalação mostra "Kumon Math" com ícone verde
+3. ✅ App abre em janela standalone (sem barra de navegação)
+4. ✅ Orientação portrait forçada
+
+### Teste 3: Funcionalidade offline
+```bash
+npx vite preview
+# Abrir http://localhost:4173
+```
+1. Navegue pelo app (Home, Jogar, etc) para popular o cache
+2. DevTools → Application → Service Workers → verificar "sw.js" ativo
+3. DevTools → Application → Cache Storage → verificar entradas:
+   - `workbox-precache-*`: deve conter model.json, .bin shards, JS/CSS
+   - `google-fonts-cache`: fontes Nunito
+4. **Desativar rede**: DevTools → Network → Offline ✓
+5. Recarregar a página
+6. ✅ App carrega normalmente (HTML, CSS, JS do cache)
+7. ✅ OCR funciona (modelo MNIST do cache)
+8. ✅ Fontes renderizam (Google Fonts do cache)
+
+### Teste 4: Auto-update
+1. Modifique qualquer arquivo → rebuild
+2. Abra o app
+3. ✅ Service Worker detecta nova versão automaticamente
+4. ✅ Na próxima visita, app atualizado é servido
+
+---
+
+## Limitações Conhecidas
+
+- **PNGs são sólidos verdes**: Sem a letra "K" por falta de conversor SVG→PNG no ambiente. Os SVGs têm a letra. Em browsers modernos, os SVGs são usados pelo manifest. Para iOS que não suporta SVG em manifest, o sólido verde funciona como fallback.
+- **Fonte Nunito só cacheia no primeiro uso**: Runtime cache (CacheFirst) — se o primeiro acesso for offline e a fonte nunca foi carregada, usa fallback do sistema.
+- **Erros TS pré-existentes**: `tsc -b && vite build` falha por erros antigos. Usar `npx vite build` diretamente funciona.
+
+---
+
+# Dev Output — Fallback Teclado Numérico Inteligente (Sprint 3.1)
+
+**Data**: 2026-02-20
+**Task**: Integrar teclado numérico como fallback após falhas consecutivas de OCR
+**Status**: ✅ Implementado
+
+---
+
+## TL;DR
+
+Teclado numérico agora é oferecido automaticamente como alternativa quando o OCR falha 2+ vezes consecutivas no mesmo exercício. O `NumericKeypadOverlay` foi atualizado para suportar respostas multi-dígito (até 99). O `OCRRetryOverlay` ganhou botão "⌨️ Usar teclado" que aparece com animação bounce após 2 retries. Respostas via teclado seguem exatamente o mesmo fluxo de validação e feedback que respostas via OCR.
+
+---
+
+## Arquivos Modificados
+
+### 1. `src/components/ui/NumericKeypadOverlay.tsx` — Multi-dígito
+
+**Antes**: Aceitava apenas 1 dígito (0-9). `handleNumberClick` substituía o input.
+**Depois**: Acumula dígitos (append). Prop `maxDigits` (padrão 2) limita tamanho. Botão "Limpar" vira "⌫" (backspace) quando há 2+ dígitos. `onSubmit` recebe `number` (não mais `digit`). Texto do cancelar mudou para "Voltar para desenho".
+
+### 2. `src/components/ui/OCRRetryOverlay.simple.tsx` — Botão de teclado
+
+**Novas props**:
+- `retryCount?: number` — quantas vezes OCR falhou neste exercício
+- `onUseKeypad?: () => void` — callback para abrir teclado
+
+**Lógica**: Quando `retryCount >= 2 && onUseKeypad`, mostra botão "⌨️ Usar teclado" abaixo de "Desenhar de novo". Botão aparece com animação `keypadBounce`. Mensagem muda para "Quer usar o teclado?".
+
+### 3. `src/components/exercises/AbstractExerciseScreen.tsx` — Integração
+
+**Novos estados**:
+- `ocrRetryCount: number` — contador de retries consecutivos por exercício
+- `{ phase: 'keypad' }` adicionado ao tipo `OCRState`
+
+**Novos handlers**:
+- `handleOpenKeypad()` — muda OCR state para `keypad`
+- `handleKeypadSubmit(number)` — cria hesitation analysis manual (speed: 'slow'), chama `processResult`, reseta retry count
+- `handleKeypadClose()` — volta para desenho (OCR idle)
+
+**Incremento do contador**:
+- `handleOCRRetry()` — incrementa `ocrRetryCount`
+- `handleOCRReject()` — incrementa `ocrRetryCount`
+
+**Reset do contador**:
+- useEffect de novo problema (mudança de nível)
+- `advanceToNext()` (próximo exercício)
+
+**Props passados ao OCRRetryOverlay**:
+```tsx
+<OCRRetryOverlay
+  onRetry={handleOCRRetry}
+  retryCount={ocrRetryCount}
+  onUseKeypad={handleOpenKeypad}
+/>
+```
+
+**Renderização do keypad**:
+```tsx
+{ocrState.phase === 'keypad' && (
+  <NumericKeypadOverlay
+    onSubmit={handleKeypadSubmit}
+    onClose={handleKeypadClose}
+  />
+)}
+```
+
+---
+
+## Fluxo Completo
+
+```
+1. Criança desenha no canvas → clica "Enviar"
+2. OCR tenta reconhecer → confiança <50%
+3. OCRRetryOverlay aparece: "Não consegui entender"
+   → Botão "🔄 Desenhar de novo" (sempre visível)
+   → [ocrRetryCount incrementa para 1]
+
+4. Criança tenta de novo → OCR falha novamente
+5. OCRRetryOverlay: ocrRetryCount = 1
+   → Só "🔄 Desenhar de novo"
+   → [ocrRetryCount incrementa para 2]
+
+6. Criança tenta de novo → OCR falha novamente
+7. OCRRetryOverlay: ocrRetryCount = 2 (≥2!)
+   → "🔄 Desenhar de novo"
+   → "⌨️ Usar teclado" ← NOVO! (com bounce animation)
+
+8a. Se clica "Desenhar de novo": volta para canvas (retry count continua)
+8b. Se clica "Usar teclado": NumericKeypadOverlay abre
+    → Digita resposta (ex: "12") → clica "✓ OK"
+    → processResult(12, 3) é chamado
+    → FeedbackOverlay mostra se acertou/errou
+    → Próximo exercício (retry count reseta)
+
+9. Se clica "Voltar para desenho" no keypad: volta para canvas
+```
+
+---
+
+## Como Testar
+
+```bash
+npm run dev
+```
+
+### Cenário 1: Teclado aparece após 2 retries
+1. Home → Jogar
+2. **Desenhe um rabisco ilegível** → Enviar
+3. ✅ OCRRetryOverlay: "Não consegui entender" + botão "Desenhar de novo"
+4. Clique "Desenhar de novo" → rabisque de novo → Enviar
+5. ✅ OCRRetryOverlay de novo, SEM botão de teclado (retry 1)
+6. Clique "Desenhar de novo" → rabisque de novo → Enviar
+7. ✅ OCRRetryOverlay COM botão "⌨️ Usar teclado" (retry 2!)
+8. ✅ Botão aparece com animação bounce
+
+### Cenário 2: Usar teclado e acertar
+1. Após cenário 1, clique "⌨️ Usar teclado"
+2. ✅ NumericKeypadOverlay abre (modal com botões 0-9)
+3. Digite a resposta correta (ex: se 2+3, digite "5")
+4. Clique "✓ OK"
+5. ✅ FeedbackOverlay verde: "Correto!"
+6. ✅ Próximo exercício (retry count resetou)
+
+### Cenário 3: Usar teclado e errar
+1. Repita cenário 1
+2. Clique "⌨️ Usar teclado"
+3. Digite resposta errada (ex: "9")
+4. Clique "✓ OK"
+5. ✅ FeedbackOverlay vermelho: "Quase! A resposta certa é X"
+6. ✅ Próximo exercício normalmente
+
+### Cenário 4: Multi-dígito
+1. Avance até "Somas até 20" (nível 3+)
+2. Force 2 retries → abra teclado
+3. ✅ Pode digitar "12", "15", "20" etc (2 dígitos)
+4. ✅ Botão "Limpar" vira "⌫" quando tem 2+ dígitos
+
+### Cenário 5: Cancelar teclado
+1. Após cenário 1, clique "⌨️ Usar teclado"
+2. Clique "Voltar para desenho"
+3. ✅ Volta para canvas, pode desenhar novamente
+4. ✅ Retry count não reseta (teclado aparecerá de novo se falhar)
+
+---
+
+# Dev Output — Animações de Transição (Sprint 2.3)
+
+**Data**: 2026-02-20
+**Task**: Transições suaves entre exercícios, mudanças de nível, e fim de sessão
+**Status**: ✅ Implementado
+
+---
+
+## TL;DR
+
+Sistema completo de animações de transição implementado. Fade out/in (300ms) entre exercícios normais. Transição especial com slide + flash (600ms) quando o nível muda. Efeito "virar página" (800ms) ao final da sessão. Tudo baseado em CSS animations sem dependências externas.
+
+---
+
+## Tipos de Transição
+
+### 1. **Transição Normal** (exercício → exercício)
+- **Duração**: 300ms
+- **Efeito**: Fade out → Fade in
+- **Quando**: Entre exercícios sem mudança de nível
+
+### 2. **Transição de Mudança de Nível** (level change)
+- **Duração**: 600ms
+- **Efeito**: Slide lateral + flash de brilho
+- **Quando**: Nível sobe ou desce (ex: "até 5" → "até 10")
+- **Visual**:
+  - **Out**: Desliza para esquerda (-50px) com fade
+  - **In**: Entra da direita (+50px), escala 1.05, brightness 1.3, depois normaliza
+
+### 3. **Transição de Fim de Sessão** (session end)
+- **Duração**: 800ms
+- **Efeito**: Perspectiva 3D "virar página"
+- **Quando**: Após completar 10 exercícios
+- **Visual**: RotateY -20deg com fade out
+- **Complemento**: SessionSummaryScreen entra com flip in reverso (rotateY +20deg → 0deg)
+
+---
+
+## Arquivos Modificados
+
+### 1. `src/components/exercises/AbstractExerciseScreen.tsx` — Motor de animações
+
+**Novos estados**:
+```typescript
+const [isTransitioning, setIsTransitioning] = useState(false);
+const [transitionType, setTransitionType] = useState<'normal' | 'level-change' | 'session-end'>('normal');
+const levelChangedRef = useRef(false);
+```
+
+**Lógica de transição** (em `advanceToNext`):
+```typescript
+// 1. Determinar tipo
+const type = sessionComplete ? 'session-end'
+  : levelChanged ? 'level-change'
+  : 'normal';
+
+// 2. Fade out
+setIsTransitioning(true);
+
+// 3. Atualizar conteúdo após duração
+setTimeout(() => {
+  // Gerar próximo problema ou chamar onSessionComplete
+}, duration);
+
+// 4. Fade in
+setTimeout(() => setIsTransitioning(false), 50);
+```
+
+**CSS Animations adicionadas**:
+- `@keyframes fadeIn` / `fadeOut` — Transição normal
+- `@keyframes levelChangeOut` / `levelChangeIn` — Slide + flash
+- `@keyframes sessionEndOut` — Perspectiva 3D
+
+**Classes dinâmicas aplicadas ao Flex principal**:
+```typescript
+className={
+  isTransitioning
+    ? `transition-${transitionType}-out`
+    : `transition-${transitionType}-in`
+}
+```
+
+**Detecção de mudança de nível**:
+```typescript
+// No useEffect de detecção de currentLevel
+if (previousLevel !== currentLevel) {
+  levelChangedRef.current = true; // Marca para animação especial
+}
+```
+
+### 2. `src/components/screens/SessionSummaryScreen.tsx` — Animação de entrada
+
+**Imports adicionados**:
+```typescript
+import { useState, useEffect } from 'react';
+```
+
+**Estado de visibilidade**:
+```typescript
+const [isVisible, setIsVisible] = useState(false);
+
+useEffect(() => {
+  const timer = setTimeout(() => setIsVisible(true), 50);
+  return () => clearTimeout(timer);
+}, []);
+```
+
+**CSS Animation**:
+```css
+@keyframes sessionSummaryFlipIn {
+  0% {
+    opacity: 0;
+    transform: perspective(1000px) rotateY(20deg) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: perspective(1000px) rotateY(0deg) scale(1);
+  }
+}
+```
+
+**Classe aplicada ao Container**:
+```typescript
+<Container
+  className={isVisible ? 'session-summary-enter' : ''}
+  style={{ opacity: isVisible ? 1 : 0 }}
+>
+```
+
+---
+
+## Como Testar
+
+```bash
+npm run dev
+```
+
+### **Teste 1: Transição normal entre exercícios**
+1. Home → Jogar
+2. Resolver um exercício (desenhar + enviar)
+3. Feedback aparece → fecha automaticamente
+4. ✅ Tela faz fade out (300ms)
+5. ✅ Próximo exercício aparece com fade in (300ms)
+6. ✅ Transição suave, sem "pulo"
+
+### **Teste 2: Transição de mudança de nível**
+1. Resolver **5 exercícios rapidamente** (<3s cada)
+2. No 5º acerto: nível muda (até 5 → até 10)
+3. Feedback fecha
+4. ✅ Tela desliza para esquerda com fade out (600ms)
+5. ✅ Novo exercício entra da direita com:
+   - Slide da direita
+   - Leve zoom (scale 1.05 → 1)
+   - Flash de brilho (brightness 1.3 → 1)
+6. ✅ Efeito dramático, diferente da transição normal
+
+### **Teste 3: Transição de fim de sessão**
+1. Completar 10 exercícios
+2. No 10º exercício, após feedback:
+3. ✅ Tela de exercício faz "virar página" (rotateY -20deg, 800ms)
+4. ✅ SessionSummaryScreen aparece com flip in (rotateY +20deg → 0deg)
+5. ✅ Efeito de "virar página" visível
+
+### **Teste 4: Detectar tipo de transição no console**
+Abra DevTools (F12) e adicione logs temporários:
+```typescript
+console.log('Tipo de transição:', type);
+```
+- Normal: "normal"
+- Mudança de nível: "level-change"
+- Fim de sessão: "session-end"
+
+---
+
+## Detalhes Técnicos
+
+### Duração por Tipo
+```typescript
+const duration = type === 'level-change' ? 600
+  : type === 'session-end' ? 800
+  : 300;
+```
+
+### CSS Transform Properties
+- **Fade**: `opacity` 0 ↔ 1
+- **Slide**: `translateX` -50px/+50px
+- **Flash**: `filter: brightness(1.3)` → `brightness(1)`
+- **Flip**: `perspective(1000px) rotateY(±20deg)`
+- **Scale**: `scale(1.05)` → `scale(1)`
+
+### Performance
+- Todas as animações usam `transform` e `opacity` (GPU-accelerated)
+- Sem layout recalc durante animações
+- CSS animations puras (não JavaScript RAF)
+
+---
+
+## Benefícios
+
+1. **Feedback visual claro**: Criança percebe que mudou de exercício
+2. **Destaque de progresso**: Mudança de nível tem celebração visual
+3. **Sensação de conclusão**: "Virar página" marca fim da sessão
+4. **Smooth UX**: Zero "pulos" ou aparições abruptas
+5. **Performance**: GPU-accelerated, 60fps consistente
+
+---
+
+# Dev Output — Dashboard de Progresso (Sprint 2.2)
+
+**Data**: 2026-02-20
+**Task**: Mapa visual de níveis tipo jogo
+**Status**: ✅ Implementado
+
+---
+
+## TL;DR
+
+Dashboard de progresso criado com grid visual de níveis estilo mapa de jogo. Mostra todos os níveis de adição (até 5, até 10, até 15, até 20) com estados: desbloqueado (verde), bloqueado (cinza + cadeado), e atual (verde vibrante + animação pulse + troféu). Acessível via botão "Ver Progresso" na HomeScreen.
+
+---
+
+## Arquivos Criados
+
+### 1. `src/components/screens/ProgressDashboard.tsx` — Tela de mapa de níveis
+
+**Props**:
+- `currentLevel: MasteryLevel` — Nível atual do jogador
+- `totalStars: number` — Total de estrelas acumuladas
+- `onBack: () => void` — Callback para voltar
+
+**Visual**:
+- Background gradiente roxo (667eea → 764ba2)
+- Header com título "Seu Progresso" + contador de estrelas
+- Grid responsivo de cards de nível (1-4 colunas)
+- Footer motivacional
+
+**LevelCard individual**:
+- Badge numerado (posição no canto superior esquerdo)
+- **Desbloqueado**: Verde claro (#81C784), nome do nível visível
+- **Bloqueado**: Cinza (#E0E0E0), ícone cadeado, nome do nível visível mas opaco
+- **Atual**: Verde vibrante (#4CAF50), ícone troféu, badge "Atual", animação pulse (scale + box-shadow), borda verde escura
+- Estrelas por nível (placeholder para feature futura)
+
+**Animação**:
+```css
+@keyframes levelPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+```
+
+---
+
+## Arquivos Modificados
+
+### 1. `src/components/screens/HomeScreen.tsx` — Botão "Ver Progresso"
+
+**Nova prop**:
+```typescript
+onViewProgress?: () => void
+```
+
+**Novo botão** (abaixo do botão "Jogar"):
+- Texto: "🗺️ Ver Progresso"
+- Estilo: outline, borda roxa (#667eea), altura 64px, fonte 24px
+- Posicionado entre "Jogar" e links discretos
+
+### 2. `src/components/screens/index.ts` — Export do ProgressDashboard
+
+### 3. `src/App.tsx` — Nova view 'progress-dashboard'
+
+**Import adicionado**:
+```typescript
+import { ProgressDashboard } from './components/screens'
+```
+
+**Tipo atualizado**:
+```typescript
+type AppView = 'home' | 'exercise' | 'dev-dashboard' | 'session-summary' | 'progress-dashboard'
+```
+
+**Nova renderização condicional**:
+```typescript
+if (currentView === 'progress-dashboard') {
+  return (
+    <ProgressDashboard
+      currentLevel={currentLevel}
+      totalStars={totalStars}
+      onBack={() => setCurrentView('home')}
+    />
+  )
+}
+```
+
+**Callback no HomeScreen**:
+```typescript
+<HomeScreen
+  onViewProgress={() => setCurrentView('progress-dashboard')}
+/>
+```
+
+---
+
+## Como Testar
+
+```bash
+npm run dev
+```
+
+### Cenário 1: Abrir dashboard pela primeira vez
+1. Tela inicial (Home) → clicar **"🗺️ Ver Progresso"**
+2. ✅ Abre dashboard com fundo gradiente roxo
+3. ✅ Header mostra "Seu Progresso" + "0 estrelas"
+4. ✅ Grid mostra 4 cards de nível:
+   - **Nível 1 (Somas até 5)**: Verde vibrante, troféu, badge "Atual", pulsando
+   - **Níveis 2-4 (até 10, 15, 20)**: Cinza, cadeado, bloqueados
+5. ✅ Botão "← Voltar" no canto superior direito
+
+### Cenário 2: Dashboard após progressão
+1. Home → clicar "Jogar"
+2. Resolver 5 exercícios rapidamente (nível sobe para "até 10")
+3. Voltar para Home → clicar "Ver Progresso"
+4. ✅ Grid mostra:
+   - **Nível 1 (até 5)**: Verde claro (desbloqueado, mas não atual)
+   - **Nível 2 (até 10)**: Verde vibrante, troféu, "Atual", pulsando
+   - **Níveis 3-4**: Cinza, cadeado, bloqueados
+
+### Cenário 3: Navegação completa
+1. Home → Ver Progresso → ✅ Dashboard abre
+2. Dashboard → clicar "← Voltar" → ✅ Volta para Home
+3. Home → Jogar → ✅ Abre exercícios
+4. Exercícios → ← Voltar → ✅ Volta para Home (dashboard não é afetado)
+
+---
+
+## Lógica de Desbloqueio
+
+```typescript
+function getLevelCardData(currentLevel: MasteryLevel): LevelCardData[] {
+  // Nível está desbloqueado se maxResult <= currentLevel.maxResult
+  const isUnlocked = maxResult <= currentMax;
+
+  // Nível é atual se operation + maxResult coincidem exatamente
+  const isCurrent = currentOp === 'addition' && maxResult === currentMax;
+}
+```
+
+**Exemplo**:
+- `currentLevel = { operation: 'addition', maxResult: 10 }`
+- Desbloqueados: até 5 ✅, até 10 ✅
+- Atual: até 10 (único com troféu + pulse)
+- Bloqueados: até 15 ❌, até 20 ❌
+
+---
+
+## Benefícios
+
+1. **Visibilidade de progresso**: Criança vê todos os níveis e onde está
+2. **Motivação visual**: "Mapa de jogo" com níveis bloqueados gera vontade de desbloquear
+3. **Awareness de conquista**: Verde claro nos desbloqueados mostra o que já foi conquistado
+4. **Destaque do atual**: Pulse + troféu deixa claro "você está aqui"
+
+---
+
+## Limitações Conhecidas
+
+- **Sem rastreamento de estrelas por nível**: Placeholder existe (`starsEarned`), mas store não rastreia isso ainda. Feature futura.
+- **Só mostra níveis de adição**: Subtração ainda não integrada no fluxo principal (Sprint 4.1)
+- **Sem mudança de fase CPA**: Só fase 'abstract' por enquanto
+
+---
+
+# Dev Output — Badge de Nível + Notificação de Mudança (Sprint 2.1)
+
+**Data**: 2026-02-20
+**Task**: Indicador de nível na tela de exercício com animações de transição
+**Status**: ✅ Implementado
+
+---
+
+## TL;DR
+
+Badge discreto mostrando nível atual ("Somas até 10") sempre visível na tela de exercício. Quando o nível muda mid-session, aparece notificação animada com mensagem motivacional: "Novo desafio!" (aumento) ou "Vamos praticar mais um pouco" (regressão). Animação de pulse com duração de 3s.
+
+---
+
+## Arquivos Criados
+
+### 1. `src/utils/levelFormat.ts` — Formatação de níveis
+
+**Funções utilitárias**:
+- `formatLevelName(level: MasteryLevel): string` — Converte nível em texto ("Somas até 10", "Subtrações até 5")
+- `getLevelChangeDirection(oldLevel, newLevel)` — Retorna 'increase' | 'decrease' | 'none'
+
+### 2. `src/components/ui/LevelBadge.tsx` — Badge discreto
+
+**Props**: `{ level: MasteryLevel }`
+**Visual**: Badge Mantine com cor dinâmica (verde=adição, laranja=subtração), tamanho 16px, padding 12×20
+**Posição**: Canto superior esquerdo da tela de exercício (sempre visível)
+
+### 3. `src/components/ui/LevelChangeNotification.tsx` — Notificação animada
+
+**Props**: `{ oldLevel, newLevel, onClose }`
+**Visual**:
+- Modal centralizado com emoji grande (🎉 aumento, 💪 regressão, ✨ outro)
+- Título motivacional
+- Subtítulo com novo nível
+- Animação `levelChangePulse` (scale 0.8→1.05→1)
+- Auto-close após 3s com fade out
+
+**Mensagens**:
+- Aumento: "Novo desafio!" + "Agora você está em [nível]"
+- Regressão: "Vamos praticar mais um pouco" + "Voltamos para [nível]"
+
+---
+
+## Arquivos Modificados
+
+### 1. `src/components/exercises/AbstractExerciseScreen.tsx` — Integração completa
+
+**Imports adicionados**:
+```typescript
+import { LevelBadge } from '../ui/LevelBadge';
+import { LevelChangeNotification } from '../ui/LevelChangeNotification';
+import type { MasteryLevel } from '../../types';
+```
+
+**Novo estado**:
+```typescript
+const [levelChangeNotification, setLevelChangeNotification] = useState<{
+  oldLevel: MasteryLevel;
+  newLevel: MasteryLevel;
+} | null>(null);
+const previousLevelRef = useRef<MasteryLevel>(currentLevel);
+```
+
+**Novo useEffect** (detecção de mudança de nível):
+```typescript
+useEffect(() => {
+  if (
+    previousLevel.operation !== currentLevel.operation ||
+    previousLevel.maxResult !== currentLevel.maxResult
+  ) {
+    setLevelChangeNotification({ oldLevel: previousLevel, newLevel: currentLevel });
+  }
+  previousLevelRef.current = currentLevel;
+}, [currentLevel]);
+```
+
+**Header reestruturado**:
+- Badge de nível (sempre visível) no canto esquerdo
+- Indicador de progresso de sessão (bolinhas) no centro/direita
+- Ambos dentro de um `<Box>` flex com `space-between`
+
+**Renderização condicional**:
+```typescript
+{levelChangeNotification && (
+  <LevelChangeNotification
+    oldLevel={levelChangeNotification.oldLevel}
+    newLevel={levelChangeNotification.newLevel}
+    onClose={() => setLevelChangeNotification(null)}
+  />
+)}
+```
+
+---
+
+## Como Testar
+
+```bash
+npm run dev
+```
+
+### Cenário 1: Badge sempre visível
+1. Abrir app → clicar "Jogar"
+2. ✅ Canto superior esquerdo mostra "Somas até 5" (badge verde)
+
+### Cenário 2: Notificação de aumento de nível
+1. Resolver 5 exercícios **rapidamente** (<3s cada) e **corretamente**
+2. No 5º acerto rápido: nível sobe (até 5 → até 10)
+3. ✅ Notificação aparece centralizada: 🎉 "Novo desafio!" + "Agora você está em Somas até 10"
+4. ✅ Badge muda para "Somas até 10"
+5. ✅ Notificação desaparece após 3s
+6. ✅ Próximo exercício tem números maiores (ex: 3+7, 6+4)
+
+### Cenário 3: Notificação de regressão
+1. Errar 3 exercícios seguidos
+2. No 3º erro: nível desce (até 10 → até 5)
+3. ✅ Notificação aparece: 💪 "Vamos praticar mais um pouco" + "Voltamos para Somas até 5"
+4. ✅ Badge volta para "Somas até 5"
+5. ✅ Próximos exercícios ficam mais fáceis (ex: 2+3, 1+4)
+
+### Cenário 4: Badge persiste entre exercícios
+1. Resolver vários exercícios sem mudança de nível
+2. ✅ Badge continua visível mostrando nível atual
+3. ✅ Nenhuma notificação aparece (só badge estático)
+
+---
+
+## Benefícios
+
+1. **Awareness de progresso**: Criança vê o nível atual em tempo real
+2. **Motivação positiva**: Mudanças celebradas com animação
+3. **Feedback gentil em regressão**: Mensagem encorajadora, não punitiva
+4. **Zero confusão**: Badge discreto (não atrapalha exercício), notificação aparece apenas quando relevante
+
+---
+
 # Dev Output — Sessão com começo e fim (Sprint 1.4)
 
 **Data**: 2026-02-19

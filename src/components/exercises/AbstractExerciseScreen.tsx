@@ -4,26 +4,28 @@
  * Integração completa:
  * - Gerador de problemas (generateProblem)
  * - Detector de hesitação (HesitationTimer)
- * - OCR real (predictNumber) com fallback mock
+ * - OCR real (predictNumber) com fallback teclado e timeout 5s
  * - Algoritmo de maestria (MasteryTracker)
- * - FeedbackOverlay rico (confetti, streaks, tiers)
- * - Sons (useSound)
- * - Overlays de confirmação/retry OCR
+ * - Sons (useSound): acerto toca som e avança, erro mostra correção inline
+ * - Overlays de confirmação/retry OCR com fallback teclado
  */
 
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { Box, Flex, Text, Button, Group, Loader } from '@mantine/core';
 import * as tf from '@tensorflow/tfjs';
 import DrawingCanvas, { DrawingCanvasHandle } from '../canvas/DrawingCanvas';
-import FeedbackOverlay, { FeedbackType } from '../ui/FeedbackOverlay';
+import type { FeedbackType } from '../ui/FeedbackOverlay';
 import { OCRConfirmationOverlay } from '../ui/OCRConfirmationOverlay.simple';
 import { OCRRetryOverlay } from '../ui/OCRRetryOverlay.simple';
+import { NumericKeypadOverlay } from '../ui/NumericKeypadOverlay';
+import { LevelBadge } from '../ui/LevelBadge';
+import { LevelChangeNotification } from '../ui/LevelChangeNotification';
 import { generateProblem } from '../../lib/math';
 import { HesitationTimer } from '../../lib/progression';
 import { predictNumber } from '../../utils/ocr/predict';
 import { useSound } from '../../hooks';
 import { useGameStore, SESSION_SIZE } from '../../stores/useGameStore';
-import type { Problem, ExerciseResult } from '../../types';
+import type { Problem, ExerciseResult, MasteryLevel } from '../../types';
 
 interface AbstractExerciseScreenProps {
   /** Modelo OCR carregado (de useOCRModel) */
@@ -40,7 +42,8 @@ type OCRState =
   | { phase: 'idle' }
   | { phase: 'processing' }
   | { phase: 'confirmation'; recognizedNumber: number; confidence: number }
-  | { phase: 'retry' };
+  | { phase: 'retry' }
+  | { phase: 'keypad' };
 
 /**
  * Determina o tipo de feedback baseado em streak e erros consecutivos
@@ -63,38 +66,6 @@ function determineFeedbackType(
   return 'error-gentle';
 }
 
-/**
- * Gera mensagem de feedback baseada no tipo
- */
-function getFeedbackMessage(type: FeedbackType, correctAnswer: number): { message: string; subMessage?: string; correctAnswerText?: string } {
-  switch (type) {
-    case 'correct':
-      return { message: 'Correto!' };
-    case 'correct-after-errors':
-      return { message: 'Muito bem!', subMessage: 'Você conseguiu!' };
-    case 'streak-5':
-      return { message: '5 seguidos!', subMessage: 'Incrível!' };
-    case 'streak-10':
-      return { message: '10 seguidos!', subMessage: 'Você é demais!' };
-    case 'error-gentle':
-      return {
-        message: 'Quase!',
-        correctAnswerText: `A resposta certa é ${correctAnswer}`,
-      };
-    case 'error-learning':
-      return {
-        message: 'Você está aprendendo!',
-        subMessage: 'Cada tentativa te deixa mais forte',
-        correctAnswerText: `A resposta é ${correctAnswer}`,
-      };
-    case 'error-regress':
-      return {
-        message: 'Vamos ver de outro jeito!',
-        subMessage: 'Vou te ajudar com mais pistas',
-        correctAnswerText: `A resposta é ${correctAnswer}`,
-      };
-  }
-}
 
 export default function AbstractExerciseScreen({
   ocrModel,
@@ -116,13 +87,14 @@ export default function AbstractExerciseScreen({
 
   // OCR state machine
   const [ocrState, setOcrState] = useState<OCRState>({ phase: 'idle' });
+  // Contador de retries OCR consecutivos (por exercício)
+  const [ocrRetryCount, setOcrRetryCount] = useState(0);
 
-  // Feedback state
-  const [feedbackVisible, setFeedbackVisible] = useState(false);
-  const [feedbackType, setFeedbackType] = useState<FeedbackType>('correct');
-  const [feedbackMessage, setFeedbackMessage] = useState('');
-  const [feedbackSubMessage, setFeedbackSubMessage] = useState<string | undefined>();
-  const [feedbackCorrectAnswer, setFeedbackCorrectAnswer] = useState<string | undefined>();
+  // Correção inline (mostra resposta correta quando erra)
+  const [showingCorrection, setShowingCorrection] = useState<{
+    correctAnswer: number;
+    userAnswer: number;
+  } | null>(null);
 
   // Streak tracking
   const [consecutiveCorrect, setConsecutiveCorrect] = useState(0);
@@ -134,6 +106,18 @@ export default function AbstractExerciseScreen({
 
   // Guardar a análise de hesitação para uso após confirmação OCR
   const pendingHesitationRef = useRef<ReturnType<HesitationTimer['stop']> | null>(null);
+
+  // Notificação de mudança de nível
+  const [levelChangeNotification, setLevelChangeNotification] = useState<{
+    oldLevel: MasteryLevel;
+    newLevel: MasteryLevel;
+  } | null>(null);
+  const previousLevelRef = useRef<MasteryLevel>(currentLevel);
+
+  // Animações de transição
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [transitionType, setTransitionType] = useState<'normal' | 'level-change' | 'session-end'>('normal');
+  const levelChangedRef = useRef(false);
 
   // Gerar novo problema quando nível muda
   useEffect(() => {
@@ -148,9 +132,31 @@ export default function AbstractExerciseScreen({
     canvasRef.current?.clear();
     setHasDrawing(false);
     setOcrState({ phase: 'idle' });
-    setFeedbackVisible(false);
+    setOcrRetryCount(0);
+    setShowingCorrection(null);
     pendingHesitationRef.current = null;
   }, [currentLevel]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Detectar mudança de nível e mostrar notificação
+  useEffect(() => {
+    const previousLevel = previousLevelRef.current;
+
+    // Comparar nível atual com anterior
+    if (
+      previousLevel.operation !== currentLevel.operation ||
+      previousLevel.maxResult !== currentLevel.maxResult
+    ) {
+      // Nível mudou - mostrar notificação e marcar para animação especial
+      setLevelChangeNotification({
+        oldLevel: previousLevel,
+        newLevel: currentLevel,
+      });
+      levelChangedRef.current = true;
+    }
+
+    // Atualizar referência
+    previousLevelRef.current = currentLevel;
+  }, [currentLevel]);
 
   const handleDrawingChange = useCallback((hasContent: boolean) => {
     setHasDrawing(hasContent);
@@ -164,6 +170,61 @@ export default function AbstractExerciseScreen({
     setHasDrawing(false);
     timerRef.current.recordInteraction();
   };
+
+  /**
+   * Avança para o próximo problema
+   */
+  const advanceToNext = useCallback(() => {
+    if (!currentProblem) return;
+
+    // Determinar tipo de transição
+    const sessionComplete = isSessionComplete();
+    const levelChanged = levelChangedRef.current;
+
+    const type: 'normal' | 'level-change' | 'session-end' = sessionComplete
+      ? 'session-end'
+      : levelChanged
+      ? 'level-change'
+      : 'normal';
+
+    setTransitionType(type);
+
+    // Duração da transição (ms)
+    const duration = type === 'level-change' ? 600 : type === 'session-end' ? 800 : 300;
+
+    // Fase 1: Fade out
+    setIsTransitioning(true);
+
+    // Fase 2: Após fade out, atualizar conteúdo
+    setTimeout(() => {
+      if (sessionComplete) {
+        // Fim de sessão - callback para App.tsx
+        onSessionComplete?.();
+      } else {
+        // Próximo exercício
+        const nextProblem = generateProblem(currentLevel, currentProblem.id);
+        setCurrentProblem(nextProblem);
+        setPreviousProblemId(nextProblem.id);
+
+        canvasRef.current?.clear();
+        setHasDrawing(false);
+        setShowingCorrection(null);
+        setOcrState({ phase: 'idle' });
+        setOcrRetryCount(0);
+        pendingHesitationRef.current = null;
+
+        timerRef.current.start();
+
+        // Reset flag de mudança de nível
+        levelChangedRef.current = false;
+
+        // Fase 3: Fade in
+        setTimeout(() => {
+          setIsTransitioning(false);
+        }, 50);
+      }
+    }, duration);
+  }, [currentLevel, currentProblem, isSessionComplete, onSessionComplete]);
 
   /**
    * Processa o resultado final (chamada após OCR aceito ou confirmado)
@@ -194,15 +255,13 @@ export default function AbstractExerciseScreen({
     setConsecutiveErrors(newConsecutiveErrors);
     setHadErrorsInSession(newHadErrors);
 
-    // Determinar tipo de feedback
+    // Determinar tipo de feedback (para escolher o som)
     const fbType = determineFeedbackType(
       correct,
       newConsecutiveCorrect,
       newConsecutiveErrors,
       newHadErrors && correct,
     );
-
-    const fbContent = getFeedbackMessage(fbType, currentProblem.correctAnswer);
 
     // Tocar som
     if (correct) {
@@ -215,12 +274,6 @@ export default function AbstractExerciseScreen({
       playWrong();
     }
 
-    // Mostrar feedback
-    setFeedbackType(fbType);
-    setFeedbackMessage(fbContent.message);
-    setFeedbackSubMessage(fbContent.subMessage);
-    setFeedbackCorrectAnswer(fbContent.correctAnswerText);
-    setFeedbackVisible(true);
     setOcrState({ phase: 'idle' });
 
     // Criar resultado do exercício
@@ -237,38 +290,32 @@ export default function AbstractExerciseScreen({
 
     // Callback opcional para compatibilidade
     onValidated?.(correct, userAnswer, currentProblem.correctAnswer);
-  }, [currentProblem, consecutiveCorrect, consecutiveErrors, hadErrorsInSession, playCorrect, playWrong, playCelebration, submitExercise, onValidated]);
+
+    if (correct) {
+      // Acertou: avançar automaticamente (só som, sem overlay)
+      advanceToNext();
+    } else {
+      // Errou: mostrar resposta correta inline, esperar clique em "Continuar"
+      setShowingCorrection({
+        correctAnswer: currentProblem.correctAnswer,
+        userAnswer,
+      });
+    }
+  }, [currentProblem, consecutiveCorrect, consecutiveErrors, hadErrorsInSession, playCorrect, playWrong, playCelebration, submitExercise, onValidated, advanceToNext]);
 
   /**
-   * Avança para o próximo problema (chamado quando feedback fecha)
+   * Handler: clique em "Continuar" após ver a correção do erro
    */
-  const advanceToNext = useCallback(() => {
-    if (!currentProblem) return;
-
-    // Verificar se sessão acabou (10 exercícios)
-    if (isSessionComplete()) {
-      onSessionComplete?.();
-      return;
-    }
-
-    const nextProblem = generateProblem(currentLevel, currentProblem.id);
-    setCurrentProblem(nextProblem);
-    setPreviousProblemId(nextProblem.id);
-
-    canvasRef.current?.clear();
-    setHasDrawing(false);
-    setFeedbackVisible(false);
-    setOcrState({ phase: 'idle' });
-    pendingHesitationRef.current = null;
-
-    timerRef.current.start();
-  }, [currentLevel, currentProblem, isSessionComplete, onSessionComplete]);
+  const handleContinueAfterError = useCallback(() => {
+    setShowingCorrection(null);
+    advanceToNext();
+  }, [advanceToNext]);
 
   /**
    * Handler do botão "Enviar"
    */
   const handleSubmit = async () => {
-    if (!hasDrawing || ocrState.phase !== 'idle' || !currentProblem) return;
+    if (!hasDrawing || ocrState.phase !== 'idle' || !currentProblem || showingCorrection) return;
 
     // Parar timer e guardar resultado
     const hesitationAnalysis = timerRef.current.stop();
@@ -284,12 +331,10 @@ export default function AbstractExerciseScreen({
       return;
     }
 
-    // OCR Real
+    // OCR Real — modelo não disponível: fallback para teclado
     if (!ocrModel) {
-      console.warn('[AbstractExerciseScreen] Modelo OCR não disponível, usando fallback mock');
-      const input = prompt(`OCR indisponível. Qual número? (resposta: ${currentProblem.correctAnswer})`);
-      const userAnswer = parseInt(input || '0', 10);
-      processResult(userAnswer, 1);
+      console.warn('[AbstractExerciseScreen] Modelo OCR não disponível, usando teclado');
+      setOcrState({ phase: 'keypad' });
       return;
     }
 
@@ -301,7 +346,19 @@ export default function AbstractExerciseScreen({
     }
 
     try {
-      const result = await predictNumber(canvasElement, ocrModel);
+      // OCR com timeout de 5 segundos
+      const OCR_TIMEOUT_MS = 5000;
+      const result = await Promise.race([
+        predictNumber(canvasElement, ocrModel),
+        new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), OCR_TIMEOUT_MS)),
+      ]);
+
+      if (result === 'timeout') {
+        // Timeout: fallback para teclado
+        console.warn('[OCR] Timeout após 5s, oferecendo teclado');
+        setOcrState({ phase: 'keypad' });
+        return;
+      }
 
       if (!result) {
         // Canvas vazio ou sem dígitos detectados
@@ -326,8 +383,9 @@ export default function AbstractExerciseScreen({
         setOcrState({ phase: 'retry' });
       }
     } catch (err) {
+      // Erro inesperado: fallback para teclado
       console.error('[OCR] Erro na predição:', err);
-      setOcrState({ phase: 'retry' });
+      setOcrState({ phase: 'keypad' });
     }
   };
 
@@ -344,6 +402,7 @@ export default function AbstractExerciseScreen({
    */
   const handleOCRReject = () => {
     // Limpar canvas e deixar tentar novamente
+    setOcrRetryCount((c) => c + 1);
     canvasRef.current?.clear();
     setHasDrawing(false);
     setOcrState({ phase: 'idle' });
@@ -355,11 +414,49 @@ export default function AbstractExerciseScreen({
    * Handler de retry OCR (confiança muito baixa)
    */
   const handleOCRRetry = () => {
+    setOcrRetryCount((c) => c + 1);
     canvasRef.current?.clear();
     setHasDrawing(false);
     setOcrState({ phase: 'idle' });
     timerRef.current.start();
     pendingHesitationRef.current = null;
+  };
+
+  /**
+   * Handler: abrir teclado numérico (fallback OCR)
+   */
+  const handleOpenKeypad = () => {
+    setOcrState({ phase: 'keypad' });
+  };
+
+  /**
+   * Handler: submissão via teclado numérico
+   */
+  const handleKeypadSubmit = (userAnswer: number) => {
+    if (!currentProblem) return;
+
+    // Se não temos hesitation analysis, criar uma com speed 'slow' (digitou manualmente)
+    if (!pendingHesitationRef.current) {
+      pendingHesitationRef.current = {
+        speed: 'slow' as const,
+        timeMs: 10000,
+        shouldShowHint: false,
+        inactivityMs: 0,
+      };
+    }
+
+    processResult(userAnswer, ocrRetryCount + 1);
+    setOcrRetryCount(0);
+  };
+
+  /**
+   * Handler: cancelar teclado numérico (voltar para desenho)
+   */
+  const handleKeypadClose = () => {
+    canvasRef.current?.clear();
+    setHasDrawing(false);
+    setOcrState({ phase: 'idle' });
+    timerRef.current.start();
   };
 
   if (!currentProblem) {
@@ -396,16 +493,81 @@ export default function AbstractExerciseScreen({
         flexDirection: 'column',
       }}
     >
-      {/* FeedbackOverlay rico */}
-      <FeedbackOverlay
-        type={feedbackType}
-        visible={feedbackVisible}
-        message={feedbackMessage}
-        subMessage={feedbackSubMessage}
-        correctAnswer={feedbackCorrectAnswer}
-        duration={feedbackType.startsWith('streak') ? 3000 : 2000}
-        onClose={advanceToNext}
-      />
+      {/* CSS de Animações de Transição */}
+      <style>
+        {`
+          /* Fade in/out padrão */
+          @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+          }
+
+          @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+          }
+
+          /* Transição de mudança de nível (slide + flash) */
+          @keyframes levelChangeOut {
+            0% {
+              opacity: 1;
+              transform: translateX(0);
+            }
+            100% {
+              opacity: 0;
+              transform: translateX(-50px);
+            }
+          }
+
+          @keyframes levelChangeIn {
+            0% {
+              opacity: 0;
+              transform: translateX(50px) scale(1.05);
+              filter: brightness(1.3);
+            }
+            50% {
+              filter: brightness(1.3);
+            }
+            100% {
+              opacity: 1;
+              transform: translateX(0) scale(1);
+              filter: brightness(1);
+            }
+          }
+
+          /* Transição de fim de sessão (virar página) */
+          @keyframes sessionEndOut {
+            0% {
+              opacity: 1;
+              transform: perspective(1000px) rotateY(0deg);
+            }
+            100% {
+              opacity: 0;
+              transform: perspective(1000px) rotateY(-20deg);
+            }
+          }
+
+          .transition-normal-out {
+            animation: fadeOut 0.3s ease-out forwards;
+          }
+
+          .transition-normal-in {
+            animation: fadeIn 0.3s ease-in forwards;
+          }
+
+          .transition-level-change-out {
+            animation: levelChangeOut 0.6s ease-out forwards;
+          }
+
+          .transition-level-change-in {
+            animation: levelChangeIn 0.6s ease-out forwards;
+          }
+
+          .transition-session-end-out {
+            animation: sessionEndOut 0.8s ease-out forwards;
+          }
+        `}
+      </style>
 
       {/* OCR Confirmation Overlay */}
       {ocrState.phase === 'confirmation' && (
@@ -439,12 +601,46 @@ export default function AbstractExerciseScreen({
             zIndex: 900,
           }}
         >
-          <OCRRetryOverlay onRetry={handleOCRRetry} />
+          <OCRRetryOverlay
+            onRetry={handleOCRRetry}
+            retryCount={ocrRetryCount}
+            onUseKeypad={handleOpenKeypad}
+          />
         </Box>
       )}
 
-      {/* Indicador de Progresso da Sessão */}
-      {sessionRound.isActive && (
+      {/* Numeric Keypad Overlay (fallback OCR) */}
+      {ocrState.phase === 'keypad' && (
+        <NumericKeypadOverlay
+          onSubmit={handleKeypadSubmit}
+          onClose={handleKeypadClose}
+        />
+      )}
+
+      {/* Notificação de Mudança de Nível */}
+      {levelChangeNotification && (
+        <LevelChangeNotification
+          oldLevel={levelChangeNotification.oldLevel}
+          newLevel={levelChangeNotification.newLevel}
+          onClose={() => setLevelChangeNotification(null)}
+        />
+      )}
+
+      {/* Header: Badge de Nível + Indicador de Progresso */}
+      <Box
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: '8px',
+          gap: '16px',
+        }}
+      >
+        {/* Badge de Nível (sempre visível) */}
+        <LevelBadge level={currentLevel} />
+
+        {/* Indicador de Progresso da Sessão */}
+        {sessionRound.isActive && (
         <Box
           data-testid="session-progress"
           style={{
@@ -480,7 +676,8 @@ export default function AbstractExerciseScreen({
             {sessionRound.exerciseIndex + 1} de {SESSION_SIZE}
           </Text>
         </Box>
-      )}
+        )}
+      </Box>
 
       {/* Layout Principal */}
       <Flex
@@ -488,6 +685,11 @@ export default function AbstractExerciseScreen({
         gap="xl"
         h="100%"
         w="100%"
+        className={
+          isTransitioning
+            ? `transition-${transitionType}-out`
+            : `transition-${transitionType}-in`
+        }
         style={{ flex: '1 1 auto' }}
       >
         {/* Painel do Exercício */}
@@ -499,10 +701,12 @@ export default function AbstractExerciseScreen({
           style={{
             alignItems: 'center',
             justifyContent: 'center',
+            flexDirection: 'column',
             background: '#FFFFFF',
-            border: '4px solid #4A90E2',
+            border: showingCorrection ? '4px solid #E53935' : '4px solid #4A90E2',
             borderRadius: '16px',
             padding: '32px',
+            transition: 'border-color 0.3s',
           }}
         >
           <Text
@@ -535,22 +739,48 @@ export default function AbstractExerciseScreen({
             >
               =
             </Text>
-            <Text
-              component="span"
-              c="#BDBDBD"
-              style={{
-                borderBottom: '4px solid #4A90E2',
-                minWidth: '80px',
-                display: 'inline-block',
-                textAlign: 'center',
-              }}
-            >
-              ?
-            </Text>
+            {showingCorrection ? (
+              <Text
+                component="span"
+                c="#4CAF50"
+                fw={800}
+                style={{
+                  borderBottom: '4px solid #4CAF50',
+                  minWidth: '80px',
+                  display: 'inline-block',
+                  textAlign: 'center',
+                }}
+              >
+                {showingCorrection.correctAnswer}
+              </Text>
+            ) : (
+              <Text
+                component="span"
+                c="#BDBDBD"
+                style={{
+                  borderBottom: '4px solid #4A90E2',
+                  minWidth: '80px',
+                  display: 'inline-block',
+                  textAlign: 'center',
+                }}
+              >
+                ?
+              </Text>
+            )}
           </Text>
+          {showingCorrection && (
+            <Text
+              size="24px"
+              c="#E53935"
+              fw={500}
+              style={{ marginTop: '16px', textAlign: 'center' }}
+            >
+              Sua resposta: {showingCorrection.userAnswer}
+            </Text>
+          )}
         </Box>
 
-        {/* Área do Canvas + Botões */}
+        {/* Área do Canvas + Botões (ou "Continuar" quando mostrando correção) */}
         <Box
           data-testid="canvas-container"
           style={{
@@ -562,68 +792,91 @@ export default function AbstractExerciseScreen({
             gap: '24px',
           }}
         >
-          <Box style={{ width: '100%', maxWidth: '400px' }}>
-            <DrawingCanvas
-              ref={canvasRef}
-              width="100%"
-              height={200}
-              onDrawingChange={handleDrawingChange}
-            />
-          </Box>
-
-          <Group
-            data-testid="action-buttons"
-            gap="md"
-            grow
-            style={{ maxWidth: '400px', width: '100%' }}
-          >
+          {showingCorrection ? (
+            /* Correção: botão "Continuar" grande e amigável */
             <Button
-              data-testid="clear-button"
-              onClick={handleClear}
-              size="xl"
-              variant="outline"
-              color="red"
-              disabled={isProcessing}
-              style={{
-                minHeight: '64px',
-                fontSize: '24px',
-                fontWeight: 600,
-              }}
-            >
-              Limpar
-            </Button>
-
-            <Button
-              data-testid="submit-button"
-              onClick={handleSubmit}
+              data-testid="continue-button"
+              onClick={handleContinueAfterError}
               size="xl"
               variant="filled"
-              color="green"
-              disabled={!hasDrawing || isProcessing}
+              color="blue"
               style={{
-                minHeight: '64px',
-                fontSize: '24px',
-                fontWeight: 600,
-                backgroundColor: !hasDrawing
-                  ? '#CCCCCC'
-                  : isProcessing
-                  ? 'rgba(76, 175, 80, 0.7)'
-                  : '#4CAF50',
-                cursor: !hasDrawing || isProcessing ? 'not-allowed' : 'pointer',
+                minHeight: '80px',
+                fontSize: '28px',
+                fontWeight: 700,
+                minWidth: '250px',
+                borderRadius: '16px',
               }}
             >
-              {isProcessing ? (
-                <Flex direction="column" align="center" gap="xs">
-                  <Loader size="sm" color="white" />
-                  <Text size="sm" c="white" fw={500}>
-                    Analisando...
-                  </Text>
-                </Flex>
-              ) : (
-                'Enviar'
-              )}
+              Continuar
             </Button>
-          </Group>
+          ) : (
+            /* Normal: Canvas + botões Limpar/Enviar */
+            <>
+              <Box style={{ width: '100%', maxWidth: '400px' }}>
+                <DrawingCanvas
+                  ref={canvasRef}
+                  width="100%"
+                  height={200}
+                  onDrawingChange={handleDrawingChange}
+                />
+              </Box>
+
+              <Group
+                data-testid="action-buttons"
+                gap="md"
+                grow
+                style={{ maxWidth: '400px', width: '100%' }}
+              >
+                <Button
+                  data-testid="clear-button"
+                  onClick={handleClear}
+                  size="xl"
+                  variant="outline"
+                  color="red"
+                  disabled={isProcessing}
+                  style={{
+                    minHeight: '64px',
+                    fontSize: '24px',
+                    fontWeight: 600,
+                  }}
+                >
+                  Limpar
+                </Button>
+
+                <Button
+                  data-testid="submit-button"
+                  onClick={handleSubmit}
+                  size="xl"
+                  variant="filled"
+                  color="green"
+                  disabled={!hasDrawing || isProcessing}
+                  style={{
+                    minHeight: '64px',
+                    fontSize: '24px',
+                    fontWeight: 600,
+                    backgroundColor: !hasDrawing
+                      ? '#CCCCCC'
+                      : isProcessing
+                      ? 'rgba(76, 175, 80, 0.7)'
+                      : '#4CAF50',
+                    cursor: !hasDrawing || isProcessing ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {isProcessing ? (
+                    <Flex direction="column" align="center" gap="xs">
+                      <Loader size="sm" color="white" />
+                      <Text size="sm" c="white" fw={500}>
+                        Analisando...
+                      </Text>
+                    </Flex>
+                  ) : (
+                    'Enviar'
+                  )}
+                </Button>
+              </Group>
+            </>
+          )}
         </Box>
       </Flex>
     </Box>

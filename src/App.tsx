@@ -9,14 +9,14 @@ import { useState, useEffect } from 'react'
 import { Stack, Group, Text } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { Button, Card, Container, Heading, LoadingScreen } from './components/ui'
-import { HomeScreen, SessionSummaryScreen } from './components/screens'
+import { HomeScreen, SessionSummaryScreen, ProgressDashboard } from './components/screens'
 import { SoundTester, CanvasTester, OCRTester, ExerciseTester, AbstractExerciseTester } from './components/dev'
 import { useOCRModel } from './hooks'
 import { useGameStore } from './stores/useGameStore'
 
 import type { SessionSummary } from './stores/useGameStore'
 
-type AppView = 'home' | 'exercise' | 'dev-dashboard' | 'session-summary'
+type AppView = 'home' | 'exercise' | 'dev-dashboard' | 'session-summary' | 'progress-dashboard'
 
 function App() {
   const [currentView, setCurrentView] = useState<AppView>('home')
@@ -118,11 +118,26 @@ function App() {
     )
   }
 
+  // Progress Dashboard (mapa de níveis)
+  if (currentView === 'progress-dashboard') {
+    const currentLevel = useGameStore.getState().currentLevel
+    const totalStars = useGameStore.getState().totalStars
+
+    return (
+      <ProgressDashboard
+        currentLevel={currentLevel}
+        totalStars={totalStars}
+        onBack={() => setCurrentView('home')}
+      />
+    )
+  }
+
   // Home Screen (interface real para crianças)
   if (currentView === 'home') {
     return (
       <HomeScreen
         onPlay={handlePlay}
+        onViewProgress={() => setCurrentView('progress-dashboard')}
         onDevDashboard={() => setCurrentView('dev-dashboard')}
       />
     )

@@ -14,6 +14,8 @@ import { useGameStore } from '../../stores/useGameStore';
 
 interface HomeScreenProps {
   onPlay: () => void;
+  /** Callback para abrir dashboard de progresso */
+  onViewProgress?: () => void;
   /** Link discreto para dashboard dev (opcional) */
   onDevDashboard?: () => void;
 }
@@ -26,7 +28,7 @@ function formatLevelText(level: { operation: string; maxResult: number }): strin
   return `${operationName} até ${level.maxResult}`;
 }
 
-export default function HomeScreen({ onPlay, onDevDashboard }: HomeScreenProps) {
+export default function HomeScreen({ onPlay, onViewProgress, onDevDashboard }: HomeScreenProps) {
   const currentLevel = useGameStore((state) => state.currentLevel);
   const totalStars = useGameStore((state) => state.totalStars);
   const resetProgress = useGameStore((state) => state.resetProgress);
@@ -105,6 +107,28 @@ export default function HomeScreen({ onPlay, onDevDashboard }: HomeScreenProps) 
         >
           🎮 Jogar
         </Button>
+
+        {/* Botão Ver Progresso */}
+        {onViewProgress && (
+          <Button
+            data-testid="view-progress-button"
+            onClick={onViewProgress}
+            size="lg"
+            variant="outline"
+            style={{
+              minHeight: '64px',
+              fontSize: '24px',
+              fontWeight: 600,
+              width: '100%',
+              maxWidth: '400px',
+              borderWidth: '3px',
+              borderColor: '#667eea',
+              color: '#667eea',
+            }}
+          >
+            🗺️ Ver Progresso
+          </Button>
+        )}
 
         {/* Links discretos (dev e reset) */}
         <Group gap="xl">
