@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { MasteryTracker } from '../lib/progression';
+import { calculateSessionCoins } from '../lib/coinCalculator';
 import type { MasteryLevel, ExerciseResult } from '../types';
 
 // Tipos
@@ -33,6 +34,8 @@ export interface SessionRound {
   exerciseIndex: number;
   correct: number;
   incorrect: number;
+  /** Exercícios resolvidos com velocidade 'fast' — usado para o multiplicador x2 de moedas */
+  fastCount: number;
   startTime: number;
 }
 
@@ -43,6 +46,10 @@ export interface SessionSummary {
   durationMs: number;
   starsEarned: number;
   accuracy: number;
+  /** Moedas ganhas nesta sessão (base × multiplicador) */
+  coinsEarned: number;
+  /** true se o multiplicador x2 de velocidade foi ativado (≥7 respostas rápidas) */
+  speedBonus: boolean;
 }
 
 export interface GameState {
@@ -139,6 +146,7 @@ export const useGameStore = create<GameState & GameActions>()(
     exerciseIndex: 0,
     correct: 0,
     incorrect: 0,
+    fastCount: 0,
     startTime: 0,
   },
   lastSessionSummary: null,
@@ -188,6 +196,7 @@ export const useGameStore = create<GameState & GameActions>()(
         exerciseIndex: state.sessionRound.exerciseIndex + 1,
         correct: state.sessionRound.correct + (result.correct ? 1 : 0),
         incorrect: state.sessionRound.incorrect + (result.correct ? 0 : 1),
+        fastCount: state.sessionRound.fastCount + (result.speed === 'fast' ? 1 : 0),
       },
     }));
 
@@ -215,6 +224,7 @@ export const useGameStore = create<GameState & GameActions>()(
         exerciseIndex: 0,
         correct: 0,
         incorrect: 0,
+        fastCount: 0,
         startTime: Date.now(),
       },
     });
@@ -226,20 +236,36 @@ export const useGameStore = create<GameState & GameActions>()(
     return sessionRound.isActive && sessionRound.exerciseIndex >= SESSION_SIZE;
   },
 
-  // Encerrar sessão e calcular estrelas
+  // Encerrar sessão, calcular estrelas e moedas
   endSession: () => {
-    const { sessionRound } = get();
+    const { sessionRound, currentLevel } = get();
+
+    if (!sessionRound.isActive) {
+      console.warn('[endSession] Chamada ignorada — sessão não está ativa');
+      return {
+        correct: 0, incorrect: 0, total: 0, durationMs: 0,
+        starsEarned: 0, accuracy: 0, coinsEarned: 0, speedBonus: false,
+      };
+    }
+
     const total = sessionRound.exerciseIndex;
     const accuracy = total > 0 ? sessionRound.correct / total : 0;
     const durationMs = Date.now() - sessionRound.startTime;
 
-    // Premiação: +1 por completar, +2 se ≥80%, +3 se 100%
-    let starsEarned = 1; // completou sessão
+    // Premiação em estrelas: +1 por completar, +2 se ≥80%, +3 se 100%
+    let starsEarned = 1;
     if (accuracy >= 1) {
       starsEarned = 3;
     } else if (accuracy >= 0.8) {
       starsEarned = 2;
     }
+
+    // Premiação em moedas para o bichinho virtual
+    const { totalCoins, speedBonus } = calculateSessionCoins(
+      sessionRound.correct,
+      sessionRound.fastCount,
+      currentLevel,
+    );
 
     const summary: SessionSummary = {
       correct: sessionRound.correct,
@@ -248,6 +274,8 @@ export const useGameStore = create<GameState & GameActions>()(
       durationMs,
       starsEarned,
       accuracy,
+      coinsEarned: totalCoins,
+      speedBonus,
     };
 
     set((state) => ({
@@ -256,6 +284,7 @@ export const useGameStore = create<GameState & GameActions>()(
         exerciseIndex: 0,
         correct: 0,
         incorrect: 0,
+        fastCount: 0,
         startTime: 0,
       },
       lastSessionSummary: summary,
@@ -286,6 +315,7 @@ export const useGameStore = create<GameState & GameActions>()(
         exerciseIndex: 0,
         correct: 0,
         incorrect: 0,
+        fastCount: 0,
         startTime: 0,
       },
       lastSessionSummary: null,

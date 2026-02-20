@@ -65,7 +65,7 @@ export const OCRFeedbackTester: React.FC = () => {
     canvasRef.current?.clear();
   };
 
-  const playSound = (type: 'doubt' | 'oops') => {
+  const playSound = (type: 'doubt' | 'oops' | 'tap' | 'confirm') => {
     console.log(`[Som] ${type === 'doubt' ? '🤔 Dúvida' : '😅 Oops'}`);
     // TODO: integrar com Howler.js quando implementar sistema de som
   };

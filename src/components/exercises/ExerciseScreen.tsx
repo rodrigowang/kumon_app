@@ -47,7 +47,7 @@ export default function ExerciseScreen({
     const imageData = canvasRef.current?.getImageData();
 
     // Callback assíncrono (se onSubmit for async, aguarda)
-    await onSubmit?.(imageData);
+    await onSubmit?.(imageData ?? null);
 
     setIsProcessing(false);
   };

@@ -55,13 +55,14 @@ export const OCRFeedbackOverlay: React.FC<OCRFeedbackOverlayProps> = ({
     (ocrFeedbackState === 'idle' || ocrFeedbackState === 'retry');
 
   // Overlay de confirmação (50-79%)
-  if (ocrFeedbackState === 'confirming' && ocrFeedbackData?.digit !== null) {
+  if (ocrFeedbackState === 'confirming' && ocrFeedbackData !== null && ocrFeedbackData.digit !== null) {
+    const confirmedDigit = ocrFeedbackData.digit;
     return (
       <>
         <OCRConfirmationOverlay
-          digit={ocrFeedbackData.digit as number}
+          digit={confirmedDigit}
           onConfirm={() => {
-            onConfirm?.(ocrFeedbackData.digit as number);
+            onConfirm?.(confirmedDigit);
             clearOCRFeedback();
           }}
           onReject={() => {

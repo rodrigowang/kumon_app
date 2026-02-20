@@ -12,9 +12,8 @@ import type {
   ExerciseResult,
   MasteryAnalysis,
   MasteryConfig,
-  ProgressionDecision,
 } from '../../types/mastery';
-import type { MasteryLevel, CpaPhase, Operation } from '../../types/progression';
+import type { MasteryLevel, Operation } from '../../types/progression';
 import {
   DEFAULT_MASTERY_CONFIG,
   MICROLEVEL_PROGRESSION,

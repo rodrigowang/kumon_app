@@ -25,3 +25,9 @@ export { NumericKeypadOverlay } from './NumericKeypadOverlay';
 export { FloatingKeypadButton } from './FloatingKeypadButton';
 export { default as FeedbackOverlay } from './FeedbackOverlay';
 export type { FeedbackType, FeedbackOverlayProps } from './FeedbackOverlay';
+
+export { default as PetDisplay } from './PetDisplay';
+export type { PetDisplayStatus } from './PetDisplay';
+
+export { default as StreakDisplay } from './StreakDisplay';
+export { default as TrophyDisplay } from './TrophyDisplay';

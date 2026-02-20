@@ -5,11 +5,13 @@
  * Design amigável para criança de 7 anos: fontes grandes, cores vibrantes, celebração.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Stack, Text, Box, Group, Badge } from '@mantine/core';
 import { Button, Container } from '../ui';
 import { useGameStore } from '../../stores/useGameStore';
+import { usePetStore } from '../../stores/usePetStore';
 import type { SessionSummary } from '../../stores/useGameStore';
+import type { CompletedLessonResult } from '../../stores/usePetStore';
 
 interface SessionSummaryScreenProps {
   summary: SessionSummary;
@@ -52,18 +54,29 @@ export default function SessionSummaryScreen({
   const currentLevel = useGameStore((state) => state.currentLevel);
   const { title, subtitle } = getMotivationalMessage(summary.accuracy);
   const [isVisible, setIsVisible] = useState(false);
+  const [lessonResult, setLessonResult] = useState<CompletedLessonResult | null>(null);
 
   const operationName = currentLevel.operation === 'addition' ? 'Somas' : 'Subtrações';
   const levelText = `${operationName} até ${currentLevel.maxResult}`;
 
   // Animação de entrada (flip in)
   useEffect(() => {
-    // Pequeno delay para garantir que a animação seja visível
     const timer = setTimeout(() => {
       setIsVisible(true);
     }, 50);
     return () => clearTimeout(timer);
   }, []);
+
+  // Registra a lição concluída no pet store — executa UMA VEZ ao montar.
+  // useRef garante idempotência mesmo com StrictMode (que remonta efeitos 2x no dev).
+  const completedRef = useRef(false);
+  const { coinsEarned } = summary;
+  useEffect(() => {
+    if (completedRef.current) return;
+    completedRef.current = true;
+    const result = usePetStore.getState().completedLesson(coinsEarned);
+    setLessonResult(result);
+  }, [coinsEarned]);
 
   return (
     <>
@@ -199,6 +212,49 @@ export default function SessionSummaryScreen({
           </Text>
         </Box>
 
+        {/* Moedas ganhas */}
+        <Box
+          data-testid="coins-earned-display"
+          style={{
+            background: 'linear-gradient(135deg, #FFF8E1 0%, #FFF3CD 100%)',
+            border: '2px solid #FFD54F',
+            borderRadius: '16px',
+            padding: '20px 28px',
+            width: '100%',
+            maxWidth: '360px',
+            textAlign: 'center',
+          }}
+        >
+          <Text size="32px" fw={800} style={{ lineHeight: 1.1 }}>
+            🪙 +{summary.coinsEarned} moedas
+          </Text>
+          {summary.speedBonus && (
+            <Text size="18px" fw={600} c="orange" mt="xs">
+              ⚡ Velocidade! ×2 aplicado
+            </Text>
+          )}
+          {lessonResult?.emergencyRescue && (
+            <Text size="16px" fw={600} c="teal" mt="sm">
+              💊 Kit de emergência: seu bichinho foi curado!
+            </Text>
+          )}
+          {lessonResult?.trophyUnlocked && (
+            <Text size="18px" fw={700} c="yellow.7" mt="sm">
+              🏆 7 dias seguidos! Troféu desbloqueado!
+            </Text>
+          )}
+          {lessonResult && lessonResult.newStreak > 0 && !lessonResult.trophyUnlocked && (
+            <Text size="16px" fw={600} c="orange" mt="sm">
+              🔥 {lessonResult.newStreak} {lessonResult.newStreak === 1 ? 'dia seguido' : 'dias seguidos'}!
+            </Text>
+          )}
+          {lessonResult?.streakBroken && (
+            <Text size="14px" fw={500} c="dimmed" mt="xs">
+              Seu streak reiniciou — jogue amanhã para manter!
+            </Text>
+          )}
+        </Box>
+
         {/* Botões de ação */}
         <Group gap="md" style={{ width: '100%', maxWidth: '400px' }} grow>
           <Button
@@ -228,7 +284,7 @@ export default function SessionSummaryScreen({
               fontWeight: 600,
             }}
           >
-            Voltar
+            Voltar ao quarto
           </Button>
         </Group>
       </Stack>

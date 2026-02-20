@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 
 interface OCRRetryOverlayProps {
   onRetry: () => void;
-  playSound?: (type: 'oops') => void;
+  playSound?: (type: 'doubt' | 'oops' | 'tap' | 'confirm') => void;
   /** Número de retries consecutivos neste exercício */
   retryCount?: number;
   /** Chamado quando o usuário quer usar o teclado numérico */

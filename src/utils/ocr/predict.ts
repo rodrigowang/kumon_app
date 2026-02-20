@@ -135,10 +135,8 @@ export async function predictDigitsAsync(
 
   for (let i = 0; i < tensors.length; i++) {
     try {
-      // Usa tf.tidy() async para cada predição
-      const prediction = await tf.tidy(() => {
-        return predictSingleDigit(model, tensors[i]);
-      });
+      // predictSingleDigit já usa tf.tidy() internamente
+      const prediction = predictSingleDigit(model, tensors[i]);
 
       predictions.push(prediction);
 

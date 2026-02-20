@@ -24,8 +24,8 @@ interface OCRResult {
  * Na implementação real, isso virá de utils/ocr/predict.ts
  */
 async function predictNumber(
-  canvas: HTMLCanvasElement,
-  model: LayersModel
+  _canvas: HTMLCanvasElement,
+  _model: LayersModel
 ): Promise<OCRResult> {
   // TODO: Implementar na Task 1.5
   // Aqui seria feito:

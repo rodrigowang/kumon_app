@@ -2,7 +2,7 @@ import { Box, Button } from '@mantine/core';
 
 interface FloatingKeypadButtonProps {
   onClick: () => void;
-  playSound?: (sound: string) => void;
+  playSound?: (sound: 'tap') => void;
 }
 
 /**

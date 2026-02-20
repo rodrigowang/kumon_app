@@ -242,15 +242,15 @@ streak.lastLessonDate = today
 ## Ordem de Implementação Recomendada
 
 ```
-Sprint 2 (bichinho virtual):            ← PRÓXIMO
-  2.1 usePetStore + petActions + utils  🔲 ← COMEÇAR AQUI
-  2.2 Economia integrada no fluxo       🔲
-  2.3 PetDisplay (visual do bichinho)   🔲
-  2.4 PetHub (nova tela principal)      🔲
-  2.5 Streak + troféu + rescue          🔲
+Sprint 2 (bichinho virtual):            ✅ COMPLETA
+  2.1 usePetStore + petActions + utils  ✅
+  2.2 Economia integrada no fluxo       ✅
+  2.3 PetDisplay (visual do bichinho)   ✅
+  2.4 PetHub (nova tela principal)      ✅
+  2.5 Streak + troféu + rescue          ✅
 
-Sprint 4 (polimento):
-  4.1 Subtração no fluxo                🔲
+Sprint 4 (polimento):                   ← PRÓXIMO
+  4.1 Subtração no fluxo                🔲 ← PRÓXIMO
   4.2 Testes automatizados              🔲
   4.3 Acessibilidade                    🔲
 ```

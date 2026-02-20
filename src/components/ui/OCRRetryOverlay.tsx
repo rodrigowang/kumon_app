@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 
 interface OCRRetryOverlayProps {
   onRetry: () => void;
-  playSound?: (type: 'oops') => void;
+  playSound?: (type: 'doubt' | 'oops' | 'tap' | 'confirm') => void;
 }
 
 /**

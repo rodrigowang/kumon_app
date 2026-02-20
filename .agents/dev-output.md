@@ -1,3 +1,214 @@
+# Dev Output — Sprint 2.5: Streak, Troféu e Emergency Rescue (visual)
+
+**Data**: 2026-02-20
+**Task**: Criar StreakDisplay e TrophyDisplay, integrar no PetHub e SessionSummaryScreen
+**Status**: ✅ Implementado
+
+---
+
+## Arquivos Criados
+
+| Arquivo | Descrição |
+|---------|-----------|
+| `src/components/ui/StreakDisplay.tsx` | Componente de streak com variantes compact/expanded, barra de progresso até troféu |
+| `src/components/ui/TrophyDisplay.tsx` | Badge dourado do troféu com animação CSS pulse |
+
+## Arquivos Modificados
+
+| Arquivo | O que mudou |
+|---------|-------------|
+| `src/components/ui/index.ts` | Exporta `StreakDisplay` e `TrophyDisplay` |
+| `src/components/screens/PetHub.tsx` | Substituiu streak/troféu inline por componentes dedicados |
+| `src/components/screens/SessionSummaryScreen.tsx` | Mostra streak atual, aviso de streak quebrado |
+
+## Funcionalidades visuais por tela
+
+### PetHub
+- `StreakDisplay compact`: 🔥/💤 + contagem no status bar, borda dourada em 7+
+- `TrophyDisplay`: badge dourado com pulse animation, só aparece quando desbloqueado
+
+### SessionSummaryScreen (bloco de moedas)
+- "🔥 N dias seguidos!" — após cada lição completada
+- "🏆 7 dias seguidos! Troféu desbloqueado!" — na lição que atinge 7
+- "Seu streak reiniciou — jogue amanhã para manter!" — quando o streak é quebrado
+- "💊 Kit de emergência: seu bichinho foi curado!" — rescue automático
+
+---
+
+# Dev Output — Sprint 2.4: PetHub (Nova Tela Principal)
+
+**Data**: 2026-02-20
+**Task**: Criar PetHub como tela principal substituindo HomeScreen na navegação
+**Status**: ✅ Implementado
+
+---
+
+## Arquivos Criados
+
+| Arquivo | Descrição |
+|---------|-----------|
+| `src/components/screens/PetHub.tsx` | Tela principal com pet, loja, inventário, streak, moedas |
+
+## Arquivos Modificados
+
+| Arquivo | O que mudou |
+|---------|-------------|
+| `src/App.tsx` | Import `PetHub` em vez de `HomeScreen`; view `'home'` renderiza `PetHub` |
+| `src/components/screens/index.ts` | Exporta `PetHub` |
+
+## Layout do PetHub
+
+```
+┌──────────────────────────────────────────┐
+│ 🔥 3 dias    🪙 24    [Somas até 5] 4★  │  status bar
+├──────────────────────────────────────────┤
+│           🏆 Troféu de 7 dias!           │  (se desbloqueado)
+│                                          │
+│       ┌────────────────────────┐         │
+│       │     PetDisplay         │         │
+│       │   (gatinho animado)    │         │
+│       └────────────────────────┘         │
+│            Feliz! 😊                     │
+├──────────────────────────────────────────┤
+│ ⚠️ Doente + sem moedas → aviso rescue   │  (condicional)
+├──────────────────────────────────────────┤
+│ Inventário                               │
+│ [💧 0x Água] [🍎 0x Comida] [💊 0x Rem.] │
+├──────────────────────────────────────────┤
+│ Loja                                     │
+│ [💧 🪙4]    [🍎 🪙6]    [💊 🪙20]       │
+├──────────────────────────────────────────┤
+│        🎮 COMEÇAR LIÇÃO (80px)           │
+├──────────────────────────────────────────┤
+│     progresso  ·  dev  ·  resetar        │
+└──────────────────────────────────────────┘
+```
+
+## Decisões Técnicas
+
+- **`data-testid="home-screen"`** mantido no PetHub para compatibilidade com testes existentes
+- **`displayStatus` local** separa a animação `eating` (temporária) do estado real do pet
+- **Reset unificado** limpa tanto `useGameStore` quanto `usePetStore`
+- **`canFeedPet` e `canBuyItem`** chamados diretamente para habilitar/desabilitar botões
+- **HomeScreen não foi deletada** — fica disponível como fallback caso necessário
+- **Build de produção OK** — GIFs incluídos no precache PWA
+
+---
+
+# Dev Output — Sprint 2.3: Pet Visual (Sprites + Componente)
+
+**Data**: 2026-02-20
+**Task**: Baixar sprites CC0, gerar GIFs por estado, criar PetDisplay.tsx
+**Status**: ✅ Implementado
+
+---
+
+## Arquivos Criados
+
+| Arquivo | Descrição |
+|---------|-----------|
+| `src/assets/sprites/pet_happy.gif` | 12 frames, 26KB — animação idle (loop) |
+| `src/assets/sprites/pet_hungry.gif` | 6 frames, 13KB — animação hurt (loop devagar) |
+| `src/assets/sprites/pet_sick.gif` | 8 frames, 17KB — animação dead (loop bem devagar) |
+| `src/assets/sprites/pet_eating.gif` | 10 frames, 21KB — animação run (loop rápido) |
+| `src/components/ui/PetDisplay.tsx` | Componente React com estado/animação + auto-retorno do eating |
+
+## Arquivos Modificados
+
+| Arquivo | O que mudou |
+|---------|-------------|
+| `src/vite-env.d.ts` | Adicionado `declare module "*.gif"` e `"*.png"` |
+| `src/components/ui/index.ts` | Exporta `PetDisplay` e `PetDisplayStatus` |
+
+---
+
+## Fonte dos Sprites
+
+**"Tiny Cat Sprite"** por OpenGameArt.org
+- Licença: CC0 1.0 Universal (domínio público)
+- Download: https://opengameart.org/content/tiny-kitten-game-sprite
+- Processamento: PNG sequences (489×461px) → GIFs animados (200×200px) via PIL
+
+## Mapeamento de Animações
+
+| Estado | Animação original | Velocidade | Loop |
+|--------|-------------------|-----------|------|
+| `happy` | 01_Idle (12 frames) | 110ms/frame | Infinito |
+| `hungry` | 04_Hurt (6 frames) | 150ms/frame | Infinito |
+| `sick` | 05_Dead (8 frames) | 180ms/frame | Infinito |
+| `eating` | 02_Run (10 frames) | 80ms/frame | Infinito — componente troca de volta para happy após 1.2s via callback |
+
+## Decisões Técnicas
+
+- **GIF > PNG sequences** — Arquivo único, auto-animado pelo browser, zero JavaScript de animação
+- **`key={gifKey}`** — Força re-render do `<img>` ao mudar status (alguns browsers travam GIF sem isso)
+- **`grayscale(30%) + opacity: 0.85` no sick** — Reforço visual extra além da animação
+- **Moldura circular colorida por estado** — Verde/Amarelo/Vermelho/Azul para reforçar leitura visual para criança de 7 anos
+
+---
+
+# Dev Output — Sprint 2.2: Economia Integrada ao Fluxo
+
+**Data**: 2026-02-20
+**Task**: Calcular moedas no endSession(), creditar no pet store, exibir na tela de resumo
+**Status**: ✅ Implementado
+
+---
+
+## Arquivos Modificados
+
+| Arquivo | O que mudou |
+|---------|-------------|
+| `src/stores/useGameStore.ts` | `SessionRound` + `fastCount`; `SessionSummary` + `coinsEarned`/`speedBonus`; `endSession()` usa `calculateSessionCoins()`; `startSession()`/`resetProgress()` inicializam `fastCount: 0` |
+| `src/components/screens/SessionSummaryScreen.tsx` | Chama `completedLesson()` no mount (useEffect, 1x); exibe bloco de moedas; mostra bônus x2, emergency rescue e troféu; botão "Voltar ao quarto" |
+
+## Arquivos Criados
+
+Nenhum.
+
+---
+
+## Decisões Técnicas
+
+- **`fastCount` em `sessionRound`** (não em `sessionStats`) — `sessionStats` é global/acumulado; precisávamos do contador por sessão
+- **`completedLesson()` chamado em `SessionSummaryScreen`** (não em `App.tsx`) — segue a spec "chamar 1 vez no mount de LessonResult"
+- **`coinsEarned` como dep do useEffect** — `summary` é prop estável, `coinsEarned` não muda; satisfaz linter e garante idempotência
+
+---
+
+# Dev Output — Sprint 2.1: Base do Bichinho Virtual
+
+**Data**: 2026-02-20
+**Task**: Criar fundação do pet virtual (store + lógica pura) sem tocar em nenhum arquivo existente
+**Status**: ✅ Implementado
+
+---
+
+## Arquivos Criados
+
+| Arquivo | Descrição |
+|---------|-----------|
+| `src/lib/streakUtils.ts` | Funções puras de streak diário (updateStreak, wasStreakBroken, etc.) |
+| `src/lib/coinCalculator.ts` | Cálculo de moedas por sessão + tabela de preços de itens |
+| `src/lib/petActions.ts` | Lógica pura de validação do pet (derivePetStatus, canFeedPet, canBuyItem) |
+| `src/stores/usePetStore.ts` | Zustand store com persist — estado completo do bichinho |
+
+## Arquivos Modificados
+
+Nenhum.
+
+---
+
+## Decisões Técnicas
+
+- **`usePetStore` separado de `useGameStore`** — ciclos de vida e preocupações distintas
+- **Status nunca persiste** — sempre derivado de `Date.now() - lastFedAt` via `derivePetStatus()`
+- **`lastLessonEmergencyRescue` não persiste** — flag temporária, limpa na próxima sessão
+- **Água e comida não curam doença** — só o remédio cura `sick`; água/comida só resolvem `hungry`
+- **Emergency rescue verifica moedas ANTES de creditá-las** (conforme spec)
+
+---
+
 # Dev Output — Tratamento de Erros Graceful + UX Simplificado (Sprint 3.3)
 
 **Data**: 2026-02-20

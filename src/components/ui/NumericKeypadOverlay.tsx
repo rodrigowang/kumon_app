@@ -5,7 +5,7 @@ interface NumericKeypadOverlayProps {
   /** Chamado com o número digitado (pode ser multi-dígito) */
   onSubmit: (number: number) => void;
   onClose: () => void;
-  playSound?: (sound: string) => void;
+  playSound?: (sound: 'tap' | 'confirm') => void;
   /** Limite máximo de dígitos (padrão: 2, suficiente para respostas até 99) */
   maxDigits?: number;
 }

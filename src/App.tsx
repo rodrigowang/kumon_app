@@ -9,7 +9,7 @@ import { useState, useEffect } from 'react'
 import { Stack, Group, Text } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { Button, Card, Container, Heading, LoadingScreen } from './components/ui'
-import { HomeScreen, SessionSummaryScreen, ProgressDashboard } from './components/screens'
+import { PetHub, SessionSummaryScreen, ProgressDashboard } from './components/screens'
 import { SoundTester, CanvasTester, OCRTester, ExerciseTester, AbstractExerciseTester } from './components/dev'
 import { useOCRModel } from './hooks'
 import { useGameStore } from './stores/useGameStore'
@@ -132,10 +132,10 @@ function App() {
     )
   }
 
-  // Home Screen (interface real para crianças)
+  // Pet Hub (tela principal com bichinho virtual)
   if (currentView === 'home') {
     return (
-      <HomeScreen
+      <PetHub
         onPlay={handlePlay}
         onViewProgress={() => setCurrentView('progress-dashboard')}
         onDevDashboard={() => setCurrentView('dev-dashboard')}
@@ -153,6 +153,7 @@ function App() {
             Kumon Math App — Dev Dashboard
           </Heading>
           <Button
+            data-testid="back-to-home-button"
             variant="outline"
             onClick={() => setCurrentView('home')}
           >
@@ -240,7 +241,7 @@ function App() {
         {/* Abstract Exercise Tester (Fase Abstrata Completa) */}
         <Card data-testid="abstract-exercise-card">
           <Stack gap="md">
-            <Heading level={3}>🎮 Fase Abstrata - Motor Completo</Heading>
+            <Heading level={3} data-testid="abstract-exercise-heading">🎮 Fase Abstrata - Motor Completo</Heading>
             <Text size="md">
               Tela de exercício com integração completa: gerador + hesitação + maestria
             </Text>

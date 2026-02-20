@@ -2,7 +2,7 @@
  * Tipos para Algoritmo de Maestria
  */
 
-import type { ResponseSpeed, ProblemResult, MasteryLevel } from './index';
+import type { ResponseSpeed, MasteryLevel } from './index';
 
 /**
  * Resultado individual de um exercício (para buffer)

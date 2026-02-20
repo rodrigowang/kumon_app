@@ -6,7 +6,7 @@ interface OCRConfirmationOverlayProps {
   digit: number;
   onConfirm: () => void;
   onReject: () => void;
-  playSound?: (type: 'doubt') => void;
+  playSound?: (type: 'doubt' | 'oops' | 'tap' | 'confirm') => void;
 }
 
 /**
