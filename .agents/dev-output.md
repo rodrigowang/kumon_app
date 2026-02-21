@@ -1,3 +1,101 @@
+# Dev Output — Sprint 4.2: Testes automatizados
+
+**Data**: 2026-02-21
+**Task**: Vitest unitários + Playwright E2E
+**Status**: ✅ Concluído — **136/136 testes passando, build OK**
+
+## Arquivos Criados/Modificados
+
+### Instalação
+- `node_modules/vitest` (2.1.9) — instalado manualmente via /tmp (package-lock.json root-owned)
+- `vitest.config.ts` — adicionado `include: ['tests/unit/**']` para excluir e2e do vitest
+
+### App (modo E2E)
+- `src/App.tsx` — flag `IS_E2E` (query param `?e2e`) pula loading screen do OCR; `mockOCR=true` automático
+
+### Testes Unitários (Vitest — 136 testes, todos ✓)
+- `tests/unit/petActions.spec.ts` — 25 testes: derivePetStatus, canFeedPet, canBuyItem
+- `tests/unit/coinCalculator.spec.ts` — 17 testes: getCoinsPerCorrect, calculateSessionCoins
+- `tests/unit/streakUtils.spec.ts` — 15 testes: updateStreak, hasCompletedToday, wasStreakBroken
+- `tests/unit/petStore.spec.ts` — 23 testes: feedPet, buyItem, completedLesson, emergency rescue, troféu
+- `tests/unit/gameStore.spec.ts` — 23 testes: startSession, endSession, submitExercise, subtractionBannerSeen, progressão adição→subtração
+- `tests/unit/progression-engine.spec.ts` — +3 testes Sprint 4.1: advance_microlevel → subtração
+
+### Teste E2E (Playwright)
+- `tests/e2e/main-flow.spec.ts` — PetHub → Lição (mockOCR via dialog) → Resumo com moedas → Voltar → PetHub
+
+---
+
+# Dev Output — Sprint 4.1: Subtração integrada no fluxo
+
+**Data**: 2026-02-20
+**Task**: Desbloquear subtração após dominar adição; transição visual no PetHub
+**Status**: ✅ Concluído — **0 erros TS, build OK**
+
+## Arquivos Modificados
+
+- `src/lib/progression/mastery.ts` — `advanceMicrolevel()` agora avança para subtração quando adição está completa
+- `src/stores/useGameStore.ts` — adicionado `subtractionBannerSeen` (persist) + `dismissSubtractionBanner()`
+- `src/components/screens/PetHub.tsx` — banner de celebração "Agora vamos subtrair!" com dismiss
+
+---
+
+# Dev Output — Audit de Bugs + Zero Débito Técnico
+
+**Data**: 2026-02-20
+**Task**: Avaliar e corrigir todos os bugs e erros TypeScript do app
+**Status**: ✅ Concluído — **0 erros TS, build OK**
+
+---
+
+## Bugs de Runtime Corrigidos
+
+| # | Arquivo | Bug | Correção |
+|---|---------|-----|----------|
+| 1 | `PetHub.tsx` | `setState` chamado durante render (`setDisplayStatus` no corpo do componente) | Movido para `useEffect` com deps `[petStatus, displayStatus]` |
+| 2 | `SessionSummaryScreen.tsx` | `completedLesson()` chamado 2x em StrictMode (double-mount) → moedas dobradas | Adicionado `useRef` guard (`completedRef.current`) |
+| 3 | `useGameStore.ts` — `endSession()` | Sem guard de `isActive` — poderia ser chamado sem sessão ativa e produzir duração absurda | Adicionado early return com `console.warn` quando `!sessionRound.isActive` |
+| 4 | `ExerciseScreen.tsx` | `imageData` era `string \| undefined` mas `onSubmit` esperava `string \| null` | Corrigido com `?? null` |
+
+## Erros TypeScript Corrigidos (16 → 0)
+
+| Arquivo | Erro | Correção |
+|---------|------|----------|
+| `OCRFeedbackOverlay.tsx` (4x) | `playSound` com tipo `(...) => void` incompatível com `(sound: string) => void` | Null check explícito + variável `confirmedDigit` |
+| `OCRConfirmationOverlay.tsx` | `playSound?: (type: 'doubt')` — tipo muito restrito | Unificado para `(type: 'doubt \| oops \| tap \| confirm') => void` |
+| `OCRRetryOverlay.tsx` + `.simple.tsx` | `playSound?: (type: 'oops')` — tipo muito restrito | Unificado |
+| `NumericKeypadOverlay.tsx` | `playSound?: (sound: string)` — tipo muito amplo | Narrowed para `(sound: 'tap \| confirm') => void` |
+| `FloatingKeypadButton.tsx` | `playSound?: (sound: string)` — tipo muito amplo | Narrowed para `(sound: 'tap') => void` |
+| `OCRFeedbackTester.tsx` | `playSound: (type: 'doubt \| oops')` — tipo incompleto | Expandido para union completo |
+| `mastery.ts` | `ProgressionDecision`, `CpaPhase` importados mas nunca usados | Removidos dos imports |
+| `types/mastery.ts` | `ProblemResult` importado mas nunca usado | Removido |
+| `ocr-integration-example.ts` | `canvas`, `model` declarados mas nunca lidos | Prefixados com `_` |
+| `predict.ts` (2x) | `tf.tidy()` recebendo função que retorna `DigitPrediction` (não `TensorContainer`) | Removido `tf.tidy()` externo redundante (`predictSingleDigit` já tem seu próprio internamente) |
+| `App.tsx` (2x) | `Button` e `Heading` sem `data-testid` obrigatório | Adicionados `data-testid="back-to-home-button"` e `"abstract-exercise-heading"` |
+
+## Arquivos Modificados
+
+| Arquivo | O que mudou |
+|---------|-------------|
+| `src/components/screens/PetHub.tsx` | setState-during-render → useEffect |
+| `src/components/screens/SessionSummaryScreen.tsx` | useRef guard para StrictMode |
+| `src/stores/useGameStore.ts` | Guard isActive em endSession() |
+| `src/components/exercises/ExerciseScreen.tsx` | imageData ?? null |
+| `src/components/ui/OCRFeedbackOverlay.tsx` | Null check + confirmedDigit |
+| `src/components/ui/OCRConfirmationOverlay.tsx` | Tipo playSound unificado |
+| `src/components/ui/OCRRetryOverlay.tsx` | Tipo playSound unificado |
+| `src/components/ui/OCRRetryOverlay.simple.tsx` | Tipo playSound unificado |
+| `src/components/ui/NumericKeypadOverlay.tsx` | Tipo playSound narrowed |
+| `src/components/ui/FloatingKeypadButton.tsx` | Tipo playSound narrowed |
+| `src/components/dev/OCRFeedbackTester.tsx` | Tipo playSound expandido |
+| `src/lib/progression/mastery.ts` | Imports unused removidos |
+| `src/types/mastery.ts` | Import unused removido |
+| `src/utils/ocr-integration-example.ts` | Parâmetros prefixados com `_` |
+| `src/utils/ocr/predict.ts` | tf.tidy() redundante removido |
+| `src/App.tsx` | data-testid adicionados |
+
+---
+
 # Dev Output — Sprint 2.5: Streak, Troféu e Emergency Rescue (visual)
 
 **Data**: 2026-02-20

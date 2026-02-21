@@ -83,6 +83,9 @@ export interface GameState {
 
   // Progresso geral
   totalStars: number;
+
+  /** true após a primeira vez que o player desbloqueia subtração — controla banner do PetHub */
+  subtractionBannerSeen: boolean;
 }
 
 interface GameActions {
@@ -95,6 +98,8 @@ interface GameActions {
   // Ações de progressão
   submitExercise: (result: ExerciseResult) => void;
   resetProgress: () => void;
+  /** Marca o banner de desbloqueio de subtração como visto */
+  dismissSubtractionBanner: () => void;
 
   // Ações de sessão (rodada de 10 exercícios)
   startSession: () => void;
@@ -152,6 +157,7 @@ export const useGameStore = create<GameState & GameActions>()(
   lastSessionSummary: null,
 
   totalStars: 0,
+  subtractionBannerSeen: false,
 
   // Actions OCR (mantidas)
   setOCRStatus: (status: OCRStatus) => set({ ocrStatus: status }),
@@ -294,6 +300,8 @@ export const useGameStore = create<GameState & GameActions>()(
     return summary;
   },
 
+  dismissSubtractionBanner: () => set({ subtractionBannerSeen: true }),
+
   // Resetar progresso (para debug/testes)
   resetProgress: () => {
     const newTracker = new MasteryTracker(INITIAL_LEVEL);
@@ -310,6 +318,7 @@ export const useGameStore = create<GameState & GameActions>()(
       },
       lastProgressionDecision: 'maintain',
       totalStars: 0,
+      subtractionBannerSeen: false,
       sessionRound: {
         isActive: false,
         exerciseIndex: 0,
@@ -332,6 +341,7 @@ export const useGameStore = create<GameState & GameActions>()(
         lastProgressionDecision: state.lastProgressionDecision,
         totalStars: state.totalStars,
         lastSessionSummary: state.lastSessionSummary,
+        subtractionBannerSeen: state.subtractionBannerSeen,
       }),
       // Reconstruir MasteryTracker após hidratação
       onRehydrateStorage: () => {

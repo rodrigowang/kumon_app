@@ -2,7 +2,7 @@
 
 **Objetivo**: Loop completo de estudo diário: criança faz contas → ganha moedas → cuida do bichinho virtual → quer voltar amanhã.
 
-**Estado atual (2026-02-20)**: ✅ **Sprints 1–3 COMPLETAS**. App funcional com HomeScreen, sessões de 10 exercícios, resumo, estrelas, progressão automática de nível, OCR, PWA offline e fallback teclado. Sprint 2 original (progressão visível) foi iniciada mas NÃO concluída — `ProgressDashboard.tsx`, `LevelBadge.tsx`, `LevelChangeNotification.tsx` e `levelFormat.ts` existem como arquivos não commitados e ficam em standby.
+**Estado atual (2026-02-20)**: ✅ **Sprints 1–3 + Sprint 2 (Bichinho Virtual) COMPLETAS**. App funcional com PetHub (tela principal), sessões de 10 exercícios, resumo com moedas, estrelas, progressão automática, OCR, PWA offline, fallback teclado e loop completo do pet virtual. Audit de bugs concluído: **0 erros TypeScript, build limpo**. `ProgressDashboard.tsx`, `LevelBadge.tsx`, `LevelChangeNotification.tsx` e `levelFormat.ts` existem como arquivos não commitados e ficam em standby (substituídos pelo PetHub como tela de progresso visual).
 
 ---
 
@@ -210,11 +210,11 @@ streak.lastLessonDate = today
 
 ## Sprint 4 — Polimento
 
-### 4.1 — Subtração integrada no fluxo
-- Hoje o gerador suporta subtração mas o fluxo padrão começa com adição
-- Após dominar adição até 20: desbloquear subtração
-- Transição visual no PetHub: "Agora vamos subtrair! Seu bichinho vai adorar! 🐾"
-- **Dificuldade de moedas** para subtração: mesma tabela (baseada em maxResult)
+### 4.1 — Subtração integrada no fluxo ✅ COMPLETA
+- `mastery.ts` → `advanceMicrolevel()` avança para subtração quando adição está no topo (maxResult=20, abstract)
+- `useGameStore.ts` → `subtractionBannerSeen` + `dismissSubtractionBanner()`
+- `PetHub.tsx` → banner "Agora vamos subtrair!" com botão "Entendi!" (aparece 1x ao desbloquear)
+- Moedas: sem alteração — já funcionam por `maxResult`
 
 ### 4.2 — Testes automatizados
 - Vitest nos pet stores (derivação de status, feedPet, buyItem, streak)
@@ -249,9 +249,14 @@ Sprint 2 (bichinho virtual):            ✅ COMPLETA
   2.4 PetHub (nova tela principal)      ✅
   2.5 Streak + troféu + rescue          ✅
 
-Sprint 4 (polimento):                   ← PRÓXIMO
-  4.1 Subtração no fluxo                🔲 ← PRÓXIMO
-  4.2 Testes automatizados              🔲
+Audit de Bugs:                          ✅ COMPLETO
+  Bugs runtime (4 críticos)             ✅
+  Erros TypeScript (16 → 0)            ✅
+  Build limpo (npx vite build)          ✅
+
+Sprint 4 (polimento):
+  4.1 Subtração no fluxo                ✅
+  4.2 Testes automatizados              ✅
   4.3 Acessibilidade                    🔲
 ```
 
@@ -263,4 +268,4 @@ Sprint 4 (polimento):                   ← PRÓXIMO
 
 ---
 
-**Última atualização**: 2026-02-20
+**Última atualização**: 2026-02-20 (Audit de bugs concluído — 0 erros TS)

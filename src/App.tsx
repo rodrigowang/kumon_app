@@ -18,6 +18,10 @@ import type { SessionSummary } from './stores/useGameStore'
 
 type AppView = 'home' | 'exercise' | 'dev-dashboard' | 'session-summary' | 'progress-dashboard'
 
+// Modo E2E: ativa mockOCR e pula tela de carregamento OCR
+// Ativado via query param: /?e2e (ex: testes Playwright)
+const IS_E2E = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('e2e')
+
 function App() {
   const [currentView, setCurrentView] = useState<AppView>('home')
   const [count, setCount] = useState(0)
@@ -61,13 +65,13 @@ function App() {
     })
   }
 
-  // Exibir tela de loading enquanto o modelo carrega
-  if (isLoading) {
+  // Exibir tela de loading enquanto o modelo carrega (pulado em modo E2E)
+  if (!IS_E2E && isLoading) {
     return <LoadingScreen data-testid="ocr-loading-screen" />
   }
 
-  // Exibir tela de erro se houver falha no carregamento
-  if (error) {
+  // Exibir tela de erro se houver falha no carregamento (pulado em modo E2E)
+  if (!IS_E2E && error) {
     return (
       <LoadingScreen
         error={error}

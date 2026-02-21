@@ -328,14 +328,25 @@ export class MasteryTracker {
   }
 
   /**
-   * Avança micro-nível (aumenta maxResult)
+   * Avança micro-nível (aumenta maxResult).
+   * Se já estiver no último micro-nível, avança para a próxima operação.
    */
   private advanceMicrolevel(): MasteryLevel | null {
     const progression = MICROLEVEL_PROGRESSION[this.currentLevel.operation];
     const currentIndex = progression.indexOf(this.currentLevel.maxResult as never);
 
     if (currentIndex === -1 || currentIndex >= progression.length - 1) {
-      return null; // Já está no último nível
+      // Último micro-nível — tentar avançar para próxima operação
+      const nextOp = getNextOperation(this.currentLevel.operation);
+      if (nextOp) {
+        const nextProgression = MICROLEVEL_PROGRESSION[nextOp];
+        return {
+          operation: nextOp,
+          maxResult: nextProgression[0] as number,
+          cpaPhase: 'concrete',
+        };
+      }
+      return null; // Última operação, nada mais a desbloquear
     }
 
     return {

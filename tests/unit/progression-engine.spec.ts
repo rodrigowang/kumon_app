@@ -464,6 +464,80 @@ describe('Motor de Progressão - Integração Completa', () => {
       });
     });
 
+    describe('Avanço de Operação: adição → subtração (Sprint 4.1)', () => {
+      it('deve avançar para subtração ao atingir maestria máxima em adição', () => {
+        const tracker = new MasteryTracker({
+          operation: 'addition',
+          maxResult: 20,
+          cpaPhase: 'abstract',
+        });
+
+        // 5 acertos rápidos → avança micro-nível mas é o último → vai para subtração
+        for (let i = 0; i < 5; i++) {
+          tracker.addResult({
+            correct: true,
+            speed: 'fast',
+            timeMs: 2000,
+            attempts: 1,
+            timestamp: Date.now(),
+          });
+        }
+
+        const analysis = tracker.analyze();
+
+        expect(analysis.decision).toBe('advance_microlevel');
+        expect(analysis.newLevel).not.toBeNull();
+        expect(analysis.newLevel?.operation).toBe('subtraction');
+        expect(analysis.newLevel?.maxResult).toBe(5);
+        expect(analysis.newLevel?.cpaPhase).toBe('concrete');
+      });
+
+      it('subtração começa no nível mais básico (maxResult=5, concrete)', () => {
+        const tracker = new MasteryTracker({
+          operation: 'addition',
+          maxResult: 20,
+          cpaPhase: 'abstract',
+        });
+
+        for (let i = 0; i < 5; i++) {
+          tracker.addResult({
+            correct: true,
+            speed: 'fast',
+            timeMs: 2000,
+            attempts: 1,
+            timestamp: Date.now(),
+          });
+        }
+
+        const newLevel = tracker.analyze().newLevel!;
+        // Concrete para que a progressão CPA reinicie do início
+        expect(newLevel.cpaPhase).toBe('concrete');
+        expect(newLevel.maxResult).toBe(5);
+      });
+
+      it('NÃO avança para subtração se não estiver no último nível de adição', () => {
+        const tracker = new MasteryTracker({
+          operation: 'addition',
+          maxResult: 15, // não é o último (seria 20)
+          cpaPhase: 'abstract',
+        });
+
+        for (let i = 0; i < 5; i++) {
+          tracker.addResult({
+            correct: true,
+            speed: 'fast',
+            timeMs: 2000,
+            attempts: 1,
+            timestamp: Date.now(),
+          });
+        }
+
+        const analysis = tracker.analyze();
+        expect(analysis.newLevel?.operation).toBe('addition'); // continua em adição
+        expect(analysis.newLevel?.maxResult).toBe(20); // avançou para próximo nível de adição
+      });
+    });
+
     describe('Bloqueio de Operação', () => {
       it('subtração NÃO deve aparecer antes de maestria em adição', () => {
         // Nível inicial de adição

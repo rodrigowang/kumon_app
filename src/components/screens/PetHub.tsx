@@ -50,6 +50,8 @@ export default function PetHub({ onPlay, onViewProgress, onDevDashboard }: PetHu
   const currentLevel = useGameStore((s) => s.currentLevel)
   const totalStars = useGameStore((s) => s.totalStars)
   const resetGameProgress = useGameStore((s) => s.resetProgress)
+  const subtractionBannerSeen = useGameStore((s) => s.subtractionBannerSeen)
+  const dismissSubtractionBanner = useGameStore((s) => s.dismissSubtractionBanner)
 
   // Pet store
   const coins = usePetStore((s) => s.coins)
@@ -104,6 +106,7 @@ export default function PetHub({ onPlay, onViewProgress, onDevDashboard }: PetHu
   const levelText = `${operationName} até ${currentLevel.maxResult}`
 
   const needsRescueWarning = petStatus === 'sick' && coins < ITEM_PRICES.medicine
+  const showSubtractionBanner = currentLevel.operation === 'subtraction' && !subtractionBannerSeen
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 
@@ -149,6 +152,44 @@ export default function PetHub({ onPlay, onViewProgress, onDevDashboard }: PetHu
 
         {/* ─── Troféu ──────────────────────────────────────────────────── */}
         <TrophyDisplay visible={hasTrophy} />
+
+        {/* ─── Banner: Subtração desbloqueada ──────────────────────────── */}
+        {showSubtractionBanner && (
+          <Box
+            data-testid="subtraction-unlock-banner"
+            style={{
+              background: 'linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%)',
+              border: '2px solid #66BB6A',
+              borderRadius: '16px',
+              padding: '16px 20px',
+              width: '100%',
+              maxWidth: '400px',
+              textAlign: 'center',
+            }}
+          >
+            <Text size="28px" mb={4}>🐾</Text>
+            <Text size="20px" fw={800} c="green.8" mb="xs">
+              Agora vamos subtrair!
+            </Text>
+            <Text size="16px" c="green.7" mb="md">
+              Seu bichinho vai adorar! 🎉
+            </Text>
+            <Button
+              data-testid="subtraction-banner-dismiss"
+              onClick={dismissSubtractionBanner}
+              size="md"
+              style={{
+                minHeight: '48px',
+                background: 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)',
+                border: 'none',
+                fontWeight: 700,
+                fontSize: '18px',
+              }}
+            >
+              Entendi! Vamos lá! ✨
+            </Button>
+          </Box>
+        )}
 
         {/* ─── Pet Display ─────────────────────────────────────────────── */}
         <PetDisplay
