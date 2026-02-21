@@ -104,6 +104,34 @@ export default function AbstractExerciseScreen({
   // Sons
   const { playCorrect, playWrong, playCelebration } = useSound();
 
+  // Atalhos de teclado globais na tela de exercício
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignorar quando um overlay está aberto
+      if (ocrState.phase !== 'idle') return;
+      if (showingCorrection) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleContinueAfterError();
+        }
+        return;
+      }
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        handleClear();
+      } else if (e.key === 'Enter' && hasDrawing) {
+        e.preventDefault();
+        handleSubmit();
+      } else if (e.key === 'k' || e.key === 'K') {
+        e.preventDefault();
+        handleOpenKeypad();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ocrState.phase, showingCorrection, hasDrawing]);
+
   // Guardar a análise de hesitação para uso após confirmação OCR
   const pendingHesitationRef = useRef<ReturnType<HesitationTimer['stop']> | null>(null);
 
@@ -643,6 +671,8 @@ export default function AbstractExerciseScreen({
         {sessionRound.isActive && (
         <Box
           data-testid="session-progress"
+          role="status"
+          aria-label={`Exercício ${sessionRound.exerciseIndex + 1} de ${SESSION_SIZE}`}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -698,6 +728,8 @@ export default function AbstractExerciseScreen({
           w={{ base: '100%', md: '40%' }}
           h={{ base: 'auto', md: '100%' }}
           display="flex"
+          aria-live="polite"
+          aria-label={`Exercício: ${currentProblem.operandA} ${currentProblem.operation === 'addition' ? 'mais' : 'menos'} ${currentProblem.operandB}`}
           style={{
             alignItems: 'center',
             justifyContent: 'center',

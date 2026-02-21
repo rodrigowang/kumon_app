@@ -1,3 +1,51 @@
+# Dev Output — Sprint 4.3: Acessibilidade
+
+**Data**: 2026-02-21
+**Task**: ARIA labels, contraste WCAG AA, navegação por teclado
+**Status**: ✅ Concluído — **0 erros TypeScript, build OK**
+
+## Arquivos Modificados
+
+### Acessibilidade — Overlays (focus trap + teclado físico + aria-modal)
+- `src/components/ui/NumericKeypadOverlay.tsx`
+  - `FocusTrap` (Mantine) envolve o conteúdo do dialog
+  - `aria-modal="true"` no dialog
+  - `aria-live="polite"` no display de número digitado
+  - `aria-label` descritivo em cada botão numérico (`Digitar N`)
+  - `data-autofocus` no botão "1" (primeiro foco ao abrir)
+  - Suporte a teclado físico: dígitos 0–9 digitam, Backspace apaga, Delete limpa, Enter confirma, Escape cancela
+
+- `src/components/ui/OCRConfirmationOverlay.simple.tsx`
+  - `FocusTrap` envolve o conteúdo
+  - `aria-modal="true"` no dialog
+  - `data-autofocus` no botão ✓ (foco automático ao abrir)
+  - Suporte a teclado: Enter/Y = confirmar, Escape/N = rejeitar
+  - `aria-label` atualizado com dica de atalho
+
+- `src/components/ui/OCRRetryOverlay.simple.tsx`
+  - `FocusTrap` envolve o conteúdo
+  - `aria-modal="true"` no dialog
+  - `data-autofocus` no botão "Desenhar de novo"
+  - Suporte a teclado: Enter/R = retry, K = usar teclado
+
+### Acessibilidade — PetHub (contraste + landmarks)
+- `src/components/screens/PetHub.tsx`
+  - `c="dimmed"` → `c="gray.7"` + `fw={700}` nos labels "Inventário" e "Loja" (contraste WCAG AA)
+  - Seções `<Box component="section" aria-label="...">` para inventário e loja
+  - Wrapper `aria-live="polite"` com `aria-label` dinâmico no PetDisplay (anuncia estado do bichinho)
+
+### Acessibilidade — Tela de Exercício (atalhos de teclado)
+- `src/components/exercises/AbstractExerciseScreen.tsx`
+  - Atalhos globais: Delete/Backspace = limpar canvas, Enter = enviar (quando tem desenho), K = abrir teclado
+  - Enter/Espaço = continuar quando mostrando correção de erro
+
+### Acessibilidade — Canvas de Desenho (foco visual)
+- `src/components/canvas/DrawingCanvas.tsx`
+  - `aria-label` dinâmico: muda conforme canvas vazio/com conteúdo
+  - Indicador de foco visual: `box-shadow` azul ao receber foco (para usuários de teclado/tablets)
+
+---
+
 # Dev Output — Sprint 4.2: Testes automatizados
 
 **Data**: 2026-02-21

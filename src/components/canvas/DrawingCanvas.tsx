@@ -251,6 +251,13 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
         <canvas
           ref={canvasRef}
           data-testid="drawing-canvas"
+          role="img"
+          aria-label={
+            strokes.length > 0
+              ? 'Área de desenho — resposta escrita. Pressione Enter para enviar ou Delete para limpar.'
+              : 'Área de desenho — escreva sua resposta aqui'
+          }
+          tabIndex={0}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
@@ -261,6 +268,13 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
             height: '100%',
             borderRadius: '12px',
             cursor: 'crosshair',
+            outline: 'none',
+          }}
+          onFocus={(e) => {
+            (e.target as HTMLCanvasElement).style.boxShadow = '0 0 0 3px #4A90E2';
+          }}
+          onBlur={(e) => {
+            (e.target as HTMLCanvasElement).style.boxShadow = 'none';
           }}
         />
       </Box>

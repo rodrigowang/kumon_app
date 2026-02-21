@@ -1,4 +1,4 @@
-import { Box, Text, Button, Group } from '@mantine/core';
+import { Box, Text, Button, FocusTrap, Group } from '@mantine/core';
 import { useEffect } from 'react';
 
 interface OCRConfirmationOverlayProps {
@@ -24,9 +24,28 @@ export const OCRConfirmationOverlay: React.FC<OCRConfirmationOverlayProps> = ({
     playSound?.('doubt');
   }, [playSound]);
 
+  // Suporte a teclado: Enter = confirmar, Escape/N = rejeitar
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === 'y' || e.key === 'Y') {
+        e.preventDefault();
+        onConfirm();
+      } else if (e.key === 'Escape' || e.key === 'n' || e.key === 'N') {
+        e.preventDefault();
+        onReject();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onConfirm, onReject]);
+
   return (
+    <FocusTrap active>
     <Box
       data-testid="confirmation-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Confirmação: você escreveu ${digit}?`}
       style={{
         position: 'absolute',
         top: 0,
@@ -91,6 +110,8 @@ export const OCRConfirmationOverlay: React.FC<OCRConfirmationOverlayProps> = ({
         <Group justify="center" gap="xl">
           <Button
             data-testid="confirm-yes"
+            aria-label="Sim, está correto (Enter)"
+            data-autofocus
             onClick={onConfirm}
             size="xl"
             radius="xl"
@@ -105,11 +126,12 @@ export const OCRConfirmationOverlay: React.FC<OCRConfirmationOverlayProps> = ({
               transition: 'all 0.2s',
             }}
           >
-            ✓
+            <span aria-hidden="true">✓</span>
           </Button>
 
           <Button
             data-testid="confirm-no"
+            aria-label="Não, está errado (Escape)"
             onClick={onReject}
             size="xl"
             radius="xl"
@@ -124,7 +146,7 @@ export const OCRConfirmationOverlay: React.FC<OCRConfirmationOverlayProps> = ({
               transition: 'all 0.2s',
             }}
           >
-            ✗
+            <span aria-hidden="true">✗</span>
           </Button>
         </Group>
       </Box>
@@ -138,5 +160,6 @@ export const OCRConfirmationOverlay: React.FC<OCRConfirmationOverlayProps> = ({
         `}
       </style>
     </Box>
+    </FocusTrap>
   );
 };

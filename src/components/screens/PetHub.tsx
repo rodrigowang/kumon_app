@@ -13,7 +13,7 @@
  */
 
 import { useState, useCallback, useEffect } from 'react'
-import { Stack, Text, Box, Group, Badge, SimpleGrid } from '@mantine/core'
+import { Stack, Text, Box, Group, Badge, SimpleGrid, UnstyledButton } from '@mantine/core'
 import { Button, Container, PetDisplay, StreakDisplay, TrophyDisplay } from '../ui'
 import { useGameStore } from '../../stores/useGameStore'
 import { usePetStore } from '../../stores/usePetStore'
@@ -122,6 +122,8 @@ export default function PetHub({ onPlay, onViewProgress, onDevDashboard }: PetHu
           {/* Moedas */}
           <Box
             data-testid="coins-display"
+            aria-label={`${coins} moedas`}
+            role="status"
             style={{
               background: '#FFF8E1',
               borderRadius: '12px',
@@ -129,7 +131,7 @@ export default function PetHub({ onPlay, onViewProgress, onDevDashboard }: PetHu
             }}
           >
             <Text size="20px" fw={700}>
-              🪙 {coins}
+              <span aria-hidden="true">🪙</span> {coins}
             </Text>
           </Box>
 
@@ -192,11 +194,22 @@ export default function PetHub({ onPlay, onViewProgress, onDevDashboard }: PetHu
         )}
 
         {/* ─── Pet Display ─────────────────────────────────────────────── */}
-        <PetDisplay
-          status={displayStatus}
-          size={140}
-          onEatingEnd={handleEatingEnd}
-        />
+        <Box
+          aria-live="polite"
+          aria-label={
+            displayStatus === 'happy' ? 'Bichinho feliz' :
+            displayStatus === 'eating' ? 'Bichinho comendo' :
+            displayStatus === 'hungry' ? 'Bichinho com fome' :
+            'Bichinho doente'
+          }
+          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}
+        >
+          <PetDisplay
+            status={displayStatus}
+            size={140}
+            onEatingEnd={handleEatingEnd}
+          />
+        </Box>
 
         {/* ─── Aviso de emergência ─────────────────────────────────────── */}
         {needsRescueWarning && (
@@ -219,8 +232,12 @@ export default function PetHub({ onPlay, onViewProgress, onDevDashboard }: PetHu
         )}
 
         {/* ─── Inventário (usar itens) ─────────────────────────────────── */}
-        <Box style={{ width: '100%', maxWidth: '400px' }}>
-          <Text size="16px" fw={600} c="dimmed" mb="xs">
+        <Box
+          component="section"
+          aria-label="Inventário — usar itens no bichinho"
+          style={{ width: '100%', maxWidth: '400px' }}
+        >
+          <Text size="16px" fw={700} c="gray.7" mb="xs">
             Inventário
           </Text>
           <SimpleGrid cols={3} spacing="sm">
@@ -233,6 +250,7 @@ export default function PetHub({ onPlay, onViewProgress, onDevDashboard }: PetHu
                 <Button
                   key={type}
                   data-testid={`use-${type}-button`}
+                  aria-label={`Usar ${item.label}, ${qty} disponível`}
                   onClick={() => handleFeed(type)}
                   disabled={!canUse}
                   variant="outline"
@@ -247,7 +265,7 @@ export default function PetHub({ onPlay, onViewProgress, onDevDashboard }: PetHu
                     opacity: canUse ? 1 : 0.5,
                   }}
                 >
-                  <Text size="28px" style={{ lineHeight: 1 }}>
+                  <Text size="28px" style={{ lineHeight: 1 }} aria-hidden="true">
                     {item.emoji}
                   </Text>
                   <Text size="14px" fw={600}>
@@ -260,8 +278,12 @@ export default function PetHub({ onPlay, onViewProgress, onDevDashboard }: PetHu
         </Box>
 
         {/* ─── Loja ────────────────────────────────────────────────────── */}
-        <Box style={{ width: '100%', maxWidth: '400px' }}>
-          <Text size="16px" fw={600} c="dimmed" mb="xs">
+        <Box
+          component="section"
+          aria-label="Loja — comprar itens para o bichinho"
+          style={{ width: '100%', maxWidth: '400px' }}
+        >
+          <Text size="16px" fw={700} c="gray.7" mb="xs">
             Loja
           </Text>
           <SimpleGrid cols={3} spacing="sm">
@@ -273,6 +295,7 @@ export default function PetHub({ onPlay, onViewProgress, onDevDashboard }: PetHu
                 <Button
                   key={type}
                   data-testid={`buy-${type}-button`}
+                  aria-label={`Comprar ${item.label} por ${item.price} moedas`}
                   onClick={() => handleBuy(type)}
                   disabled={!canAfford}
                   variant="filled"
@@ -291,11 +314,11 @@ export default function PetHub({ onPlay, onViewProgress, onDevDashboard }: PetHu
                     opacity: canAfford ? 1 : 0.6,
                   }}
                 >
-                  <Text size="28px" style={{ lineHeight: 1 }}>
+                  <Text size="28px" style={{ lineHeight: 1 }} aria-hidden="true">
                     {item.emoji}
                   </Text>
                   <Text size="14px" fw={600} c="white">
-                    🪙 {item.price}
+                    {item.price} moedas
                   </Text>
                 </Button>
               )
@@ -325,34 +348,34 @@ export default function PetHub({ onPlay, onViewProgress, onDevDashboard }: PetHu
         {/* ─── Links discretos ──────────────────────────────────────────── */}
         <Group gap="xl">
           {onViewProgress && (
-            <Text
-              size="sm"
-              c="dimmed"
-              style={{ cursor: 'pointer', textDecoration: 'underline' }}
+            <UnstyledButton
               onClick={onViewProgress}
+              aria-label="Ver progresso"
             >
-              progresso
-            </Text>
+              <Text size="sm" c="dimmed" style={{ textDecoration: 'underline' }}>
+                progresso
+              </Text>
+            </UnstyledButton>
           )}
           {onDevDashboard && (
-            <Text
-              size="sm"
-              c="dimmed"
-              style={{ cursor: 'pointer', textDecoration: 'underline' }}
+            <UnstyledButton
               onClick={onDevDashboard}
+              aria-label="Painel de desenvolvimento"
             >
-              dev
-            </Text>
+              <Text size="sm" c="dimmed" style={{ textDecoration: 'underline' }}>
+                dev
+              </Text>
+            </UnstyledButton>
           )}
-          <Text
-            size="sm"
-            c="dimmed"
-            style={{ cursor: 'pointer', textDecoration: 'underline' }}
+          <UnstyledButton
             onClick={handleReset}
             data-testid="reset-progress-link"
+            aria-label="Resetar todo o progresso"
           >
-            resetar progresso
-          </Text>
+            <Text size="sm" c="dimmed" style={{ textDecoration: 'underline' }}>
+              resetar progresso
+            </Text>
+          </UnstyledButton>
         </Group>
       </Stack>
     </Container>

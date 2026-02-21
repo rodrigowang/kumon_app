@@ -1,4 +1,4 @@
-import { Box, Text, Button, Stack } from '@mantine/core';
+import { Box, Text, Button, FocusTrap, Stack } from '@mantine/core';
 import { useEffect } from 'react';
 
 interface OCRRetryOverlayProps {
@@ -28,9 +28,28 @@ export const OCRRetryOverlay: React.FC<OCRRetryOverlayProps> = ({
 
   const showKeypadButton = retryCount >= 2 && onUseKeypad;
 
+  // Suporte a teclado: Enter = retry, K = teclado
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        onRetry();
+      } else if ((e.key === 'k' || e.key === 'K') && showKeypadButton) {
+        e.preventDefault();
+        onUseKeypad?.();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onRetry, onUseKeypad, showKeypadButton]);
+
   return (
+    <FocusTrap active>
     <Box
       data-testid="retry-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Não consegui entender o desenho"
       style={{
         position: 'absolute',
         top: 0,
@@ -104,6 +123,7 @@ export const OCRRetryOverlay: React.FC<OCRRetryOverlayProps> = ({
         <Stack gap="md" align="center">
           <Button
             data-testid="retry-button"
+            data-autofocus
             onClick={onRetry}
             size="xl"
             radius="xl"
@@ -172,5 +192,6 @@ export const OCRRetryOverlay: React.FC<OCRRetryOverlayProps> = ({
         `}
       </style>
     </Box>
+    </FocusTrap>
   );
 };

@@ -1,5 +1,5 @@
-import { Box, Button, Group, Stack, Text } from '@mantine/core';
-import { useState } from 'react';
+import { Box, Button, FocusTrap, Group, Stack, Text } from '@mantine/core';
+import { useState, useEffect } from 'react';
 
 interface NumericKeypadOverlayProps {
   /** Chamado com o número digitado (pode ser multi-dígito) */
@@ -62,6 +62,31 @@ export function NumericKeypadOverlay({
     onClose();
   };
 
+  // Suporte a teclado físico
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key >= '0' && e.key <= '9') {
+        e.preventDefault();
+        handleNumberClick(parseInt(e.key, 10));
+      } else if (e.key === 'Backspace') {
+        e.preventDefault();
+        handleBackspace();
+      } else if (e.key === 'Delete') {
+        e.preventDefault();
+        handleClear();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        handleSubmit();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        handleCancel();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentInput]);
+
   // Grid de botões: 1-9
   const numberButtons = Array.from({ length: 9 }, (_, i) => i + 1);
 
@@ -82,7 +107,11 @@ export function NumericKeypadOverlay({
         animation: 'keypadFadeIn 200ms ease-out',
       }}
       data-testid="numeric-keypad-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Teclado numérico — digite sua resposta"
     >
+      <FocusTrap active>
       <Box
         style={{
           backgroundColor: 'white',
@@ -129,6 +158,8 @@ export function NumericKeypadOverlay({
               border: '2px solid #e9ecef',
             }}
             data-testid="keypad-display"
+            aria-live="polite"
+            aria-label={currentInput ? `Número digitado: ${currentInput}` : 'Nenhum número digitado ainda'}
           >
             <Text
               size="72px"
@@ -151,6 +182,8 @@ export function NumericKeypadOverlay({
                   color="blue.6"
                   radius="md"
                   onClick={() => handleNumberClick(num)}
+                  aria-label={`Digitar ${num}`}
+                  data-autofocus={num === 1 ? true : undefined}
                   style={{
                     width: '100px',
                     height: '80px',
@@ -175,6 +208,7 @@ export function NumericKeypadOverlay({
               color="gray.6"
               radius="md"
               onClick={currentInput.length > 0 ? handleBackspace : handleClear}
+              aria-label={currentInput.length > 1 ? 'Apagar último dígito' : 'Limpar'}
               style={{
                 height: '80px',
                 fontSize: '24px',
@@ -234,6 +268,7 @@ export function NumericKeypadOverlay({
           </Button>
         </Stack>
       </Box>
+      </FocusTrap>
 
       <style>{`
         @keyframes keypadFadeIn {
