@@ -89,7 +89,7 @@ export interface CompletedLessonResult {
 function makeInitialState(): PetState {
   return {
     coins: 0,
-    lastFedAt: Date.now(), // Pet começa feliz
+    lastFedAt: 0, // Pet começa com fome
     inventory: { water: 0, food: 0, medicine: 0 },
     streak: { current: 0, lastLessonDate: '' },
     hasTrophy7Days: false,

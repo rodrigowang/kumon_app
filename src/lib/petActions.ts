@@ -21,8 +21,8 @@ export interface PetInventory {
 
 /** Limites de tempo para cada estado */
 const STATUS_THRESHOLDS = {
-  HAPPY_MAX_MS: 24 * 60 * 60 * 1000, // 24h
-  HUNGRY_MAX_MS: 48 * 60 * 60 * 1000, // 48h
+  HAPPY_MAX_MS: 12 * 60 * 60 * 1000, // 12h
+  HUNGRY_MAX_MS: 24 * 60 * 60 * 1000, // 24h
 }
 
 /**
