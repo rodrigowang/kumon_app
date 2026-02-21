@@ -111,8 +111,8 @@ export const DEFAULT_MASTERY_CONFIG: MasteryConfig = {
  * Para cada operação, define a sequência de maxResult
  */
 export const MICROLEVEL_PROGRESSION = {
-  addition: [5, 10, 15, 20],
-  subtraction: [5, 10, 15, 20],
+  addition: [5, 10, 15, 20, 99, 999],
+  subtraction: [5, 10, 15, 20, 99, 999],
 } as const;
 
 /**

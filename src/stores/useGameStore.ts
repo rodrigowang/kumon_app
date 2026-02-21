@@ -86,6 +86,8 @@ export interface GameState {
 
   /** true após a primeira vez que o player desbloqueia subtração — controla banner do PetHub */
   subtractionBannerSeen: boolean;
+  /** true após a primeira vez que o player desbloqueia multi-dígitos (maxResult=99) — controla banner do PetHub */
+  multiDigitBannerSeen: boolean;
 }
 
 interface GameActions {
@@ -100,6 +102,8 @@ interface GameActions {
   resetProgress: () => void;
   /** Marca o banner de desbloqueio de subtração como visto */
   dismissSubtractionBanner: () => void;
+  /** Marca o banner de desbloqueio de multi-dígitos como visto */
+  dismissMultiDigitBanner: () => void;
 
   // Ações de sessão (rodada de 10 exercícios)
   startSession: () => void;
@@ -158,6 +162,7 @@ export const useGameStore = create<GameState & GameActions>()(
 
   totalStars: 0,
   subtractionBannerSeen: false,
+  multiDigitBannerSeen: false,
 
   // Actions OCR (mantidas)
   setOCRStatus: (status: OCRStatus) => set({ ocrStatus: status }),
@@ -301,6 +306,7 @@ export const useGameStore = create<GameState & GameActions>()(
   },
 
   dismissSubtractionBanner: () => set({ subtractionBannerSeen: true }),
+  dismissMultiDigitBanner: () => set({ multiDigitBannerSeen: true }),
 
   // Resetar progresso (para debug/testes)
   resetProgress: () => {
@@ -319,6 +325,7 @@ export const useGameStore = create<GameState & GameActions>()(
       lastProgressionDecision: 'maintain',
       totalStars: 0,
       subtractionBannerSeen: false,
+      multiDigitBannerSeen: false,
       sessionRound: {
         isActive: false,
         exerciseIndex: 0,
@@ -342,6 +349,7 @@ export const useGameStore = create<GameState & GameActions>()(
         totalStars: state.totalStars,
         lastSessionSummary: state.lastSessionSummary,
         subtractionBannerSeen: state.subtractionBannerSeen,
+        multiDigitBannerSeen: state.multiDigitBannerSeen,
       }),
       // Reconstruir MasteryTracker após hidratação
       onRehydrateStorage: () => {

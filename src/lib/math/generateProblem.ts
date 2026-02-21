@@ -78,12 +78,34 @@ function getAdditionConfig(maxResult: number): AdditionLevelConfig {
   }
 
   // Nível 4: resultados até 20 (9+8, 7+9, 12+5...)
+  if (maxResult <= 20) {
+    return {
+      maxResult: 20,
+      minOperandA: 5,
+      maxOperandA: 15,
+      minOperandB: 3,
+      maxOperandB: 15,
+    };
+  }
+
+  // Nível 5: 2 dígitos + 1 dígito (23+5, 45+8, 71+9...)
+  if (maxResult <= 99) {
+    return {
+      maxResult: 99,
+      minOperandA: 10,
+      maxOperandA: 89,
+      minOperandB: 1,
+      maxOperandB: 9,
+    };
+  }
+
+  // Nível 6: 3 dígitos + 1 dígito (123+5, 247+8, 540+9...)
   return {
-    maxResult: 20,
-    minOperandA: 5,
-    maxOperandA: 15,
-    minOperandB: 3,
-    maxOperandB: 15,
+    maxResult: 999,
+    minOperandA: 100,
+    maxOperandA: 989,
+    minOperandB: 1,
+    maxOperandB: 9,
   };
 }
 
@@ -174,11 +196,33 @@ function getSubtractionConfig(maxResult: number): SubtractionLevelConfig {
   }
 
   // Nível 4: resultados até 20 (20-7, 18-9...)
+  if (maxResult <= 20) {
+    return {
+      minMinuend: 8,
+      maxMinuend: 20,
+      minSubtrahend: 3,
+      maxSubtrahend: 15,
+      allowNegative: false,
+    };
+  }
+
+  // Nível 5: 2 dígitos - 1 dígito (73-6, 45-8, 91-3...)
+  if (maxResult <= 99) {
+    return {
+      minMinuend: 11,
+      maxMinuend: 99,
+      minSubtrahend: 1,
+      maxSubtrahend: 9,
+      allowNegative: false,
+    };
+  }
+
+  // Nível 6: 3 dígitos - 1 dígito (452-8, 130-5, 999-7...)
   return {
-    minMinuend: 8,
-    maxMinuend: 20,
-    minSubtrahend: 3,
-    maxSubtrahend: 15,
+    minMinuend: 101,
+    maxMinuend: 999,
+    minSubtrahend: 1,
+    maxSubtrahend: 9,
     allowNegative: false,
   };
 }

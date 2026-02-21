@@ -19,16 +19,18 @@ export const ITEM_PRICES: Record<ItemType, number> = {
 /**
  * Moedas base ganhas por acerto, baseado no nível de dificuldade.
  *
- * | maxResult | Dificuldade | Moedas/acerto |
- * |-----------|-------------|---------------|
- * | ≤ 10      | Fácil       | 1c            |
- * | 11 – 20   | Média       | 3c            |
- * | > 20      | Difícil     | 5c            |
+ * | maxResult | Dificuldade     | Moedas/acerto |
+ * |-----------|-----------------|---------------|
+ * | ≤ 10      | 1+1 fácil       | 1c            |
+ * | 11 – 20   | 1+1 difícil     | 3c            |
+ * | 21 – 99   | 2+1 dígitos     | 8c            |
+ * | ≥ 100     | 3+1 dígitos     | 15c           |
  */
 export function getCoinsPerCorrect(level: MasteryLevel): number {
   if (level.maxResult <= 10) return 1
   if (level.maxResult <= 20) return 3
-  return 5
+  if (level.maxResult <= 99) return 8
+  return 15
 }
 
 export interface CoinResult {

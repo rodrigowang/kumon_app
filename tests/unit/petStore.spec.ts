@@ -3,6 +3,10 @@
  *
  * feedPet, buyItem, completedLesson, getPetStatus
  * Estado é resetado via resetPetProgress() antes de cada teste.
+ *
+ * 5 estados: happy, hungry, thirsty, hungry_and_thirsty, sick
+ * - lastFedAt controla fome, lastWateredAt controla sede
+ * - Água cura sede, comida cura fome, remédio cura sick (ambos)
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
@@ -15,21 +19,58 @@ beforeEach(() => {
   usePetStore.getState().resetPetProgress()
 })
 
+/** Helper: coloca o pet em estado happy (ambos timestamps recentes) */
+function setHappy() {
+  usePetStore.setState({ lastFedAt: Date.now(), lastWateredAt: Date.now() })
+}
+
+/** Helper: coloca o pet em estado hungry (lastFedAt > 12h, lastWateredAt ok) */
+function setHungry() {
+  usePetStore.setState({ lastFedAt: Date.now() - 13 * HOUR, lastWateredAt: Date.now() })
+}
+
+/** Helper: coloca o pet em estado thirsty (lastWateredAt > 12h, lastFedAt ok) */
+function setThirsty() {
+  usePetStore.setState({ lastFedAt: Date.now(), lastWateredAt: Date.now() - 13 * HOUR })
+}
+
+/** Helper: coloca o pet em estado sick (lastFedAt > 24h) */
+function setSick() {
+  usePetStore.setState({ lastFedAt: Date.now() - 25 * HOUR, lastWateredAt: Date.now() })
+}
+
 // ─── getPetStatus ──────────────────────────────────────────────────────────
 
 describe('getPetStatus', () => {
-  it('retorna happy no estado inicial (lastFedAt = now)', () => {
+  it('retorna hungry no estado inicial (lastFedAt = 0, pet começa com fome)', () => {
+    // Estado inicial: lastFedAt = 0 (> 24h atrás), então é sick
+    // Na verdade, lastFedAt = 0 é epoch → > 24h → sick
     const status = usePetStore.getState().getPetStatus()
-    expect(status).toBe('happy')
+    expect(status).toBe('sick')
   })
 
-  it('retorna hungry quando lastFedAt é 25h atrás', () => {
-    usePetStore.setState({ lastFedAt: Date.now() - 25 * HOUR })
+  it('retorna happy quando ambos timestamps são recentes', () => {
+    setHappy()
+    expect(usePetStore.getState().getPetStatus()).toBe('happy')
+  })
+
+  it('retorna hungry quando lastFedAt > 12h e lastWateredAt ok', () => {
+    setHungry()
     expect(usePetStore.getState().getPetStatus()).toBe('hungry')
   })
 
-  it('retorna sick quando lastFedAt é 50h atrás', () => {
-    usePetStore.setState({ lastFedAt: Date.now() - 50 * HOUR })
+  it('retorna thirsty quando lastWateredAt > 12h e lastFedAt ok', () => {
+    setThirsty()
+    expect(usePetStore.getState().getPetStatus()).toBe('thirsty')
+  })
+
+  it('retorna sick quando lastFedAt > 24h', () => {
+    setSick()
+    expect(usePetStore.getState().getPetStatus()).toBe('sick')
+  })
+
+  it('retorna sick quando lastWateredAt > 24h', () => {
+    usePetStore.setState({ lastFedAt: Date.now(), lastWateredAt: Date.now() - 25 * HOUR })
     expect(usePetStore.getState().getPetStatus()).toBe('sick')
   })
 })
@@ -38,25 +79,21 @@ describe('getPetStatus', () => {
 
 describe('feedPet', () => {
   it('retorna false quando pet está happy (recusa)', () => {
+    setHappy()
     usePetStore.setState({ inventory: { water: 3, food: 3, medicine: 3 } })
-    const ok = usePetStore.getState().feedPet('water')
-    expect(ok).toBe(false)
+    expect(usePetStore.getState().feedPet('water')).toBe(false)
   })
 
   it('retorna false quando inventário está vazio', () => {
-    usePetStore.setState({
-      lastFedAt: Date.now() - 25 * HOUR, // hungry
-      inventory: { water: 0, food: 0, medicine: 0 },
-    })
-    const ok = usePetStore.getState().feedPet('water')
-    expect(ok).toBe(false)
+    setHungry()
+    usePetStore.setState({ inventory: { water: 0, food: 0, medicine: 0 } })
+    expect(usePetStore.getState().feedPet('food')).toBe(false)
   })
 
-  it('retorna true e decrementa inventário quando hungry + água disponível', () => {
-    usePetStore.setState({
-      lastFedAt: Date.now() - 25 * HOUR,
-      inventory: { water: 2, food: 0, medicine: 0 },
-    })
+  // Água → cura sede
+  it('retorna true para água quando thirsty e decrementa inventário', () => {
+    setThirsty()
+    usePetStore.setState({ inventory: { water: 2, food: 0, medicine: 0 } })
 
     const ok = usePetStore.getState().feedPet('water')
 
@@ -64,37 +101,79 @@ describe('feedPet', () => {
     expect(usePetStore.getState().inventory.water).toBe(1)
   })
 
-  it('atualiza lastFedAt após alimentar com sucesso', () => {
+  it('atualiza lastWateredAt após dar água', () => {
     const before = Date.now()
-    usePetStore.setState({
-      lastFedAt: Date.now() - 25 * HOUR,
-      inventory: { water: 1, food: 0, medicine: 0 },
-    })
+    setThirsty()
+    usePetStore.setState({ inventory: { water: 1, food: 0, medicine: 0 } })
 
     usePetStore.getState().feedPet('water')
+
+    expect(usePetStore.getState().lastWateredAt).toBeGreaterThanOrEqual(before)
+  })
+
+  it('retorna false para água quando hungry (sem sede)', () => {
+    setHungry()
+    usePetStore.setState({ inventory: { water: 3, food: 3, medicine: 3 } })
+    expect(usePetStore.getState().feedPet('water')).toBe(false)
+  })
+
+  // Comida → cura fome
+  it('retorna true para comida quando hungry e decrementa inventário', () => {
+    setHungry()
+    usePetStore.setState({ inventory: { water: 0, food: 2, medicine: 0 } })
+
+    const ok = usePetStore.getState().feedPet('food')
+
+    expect(ok).toBe(true)
+    expect(usePetStore.getState().inventory.food).toBe(1)
+  })
+
+  it('atualiza lastFedAt após dar comida', () => {
+    const before = Date.now()
+    setHungry()
+    usePetStore.setState({ inventory: { water: 0, food: 1, medicine: 0 } })
+
+    usePetStore.getState().feedPet('food')
 
     expect(usePetStore.getState().lastFedAt).toBeGreaterThanOrEqual(before)
   })
 
-  it('retorna false para água quando sick (água não cura doença)', () => {
-    usePetStore.setState({
-      lastFedAt: Date.now() - 50 * HOUR,
-      inventory: { water: 3, food: 3, medicine: 3 },
-    })
-
-    const ok = usePetStore.getState().feedPet('water')
-    expect(ok).toBe(false)
+  it('retorna false para comida quando thirsty (sem fome)', () => {
+    setThirsty()
+    usePetStore.setState({ inventory: { water: 3, food: 3, medicine: 3 } })
+    expect(usePetStore.getState().feedPet('food')).toBe(false)
   })
 
-  it('retorna true para remédio quando sick', () => {
-    usePetStore.setState({
-      lastFedAt: Date.now() - 50 * HOUR,
-      inventory: { water: 0, food: 0, medicine: 1 },
-    })
+  // Remédio → só cura sick
+  it('retorna false para água quando sick', () => {
+    setSick()
+    usePetStore.setState({ inventory: { water: 3, food: 3, medicine: 3 } })
+    expect(usePetStore.getState().feedPet('water')).toBe(false)
+  })
+
+  it('retorna false para comida quando sick', () => {
+    setSick()
+    usePetStore.setState({ inventory: { water: 3, food: 3, medicine: 3 } })
+    expect(usePetStore.getState().feedPet('food')).toBe(false)
+  })
+
+  it('retorna true para remédio quando sick e atualiza ambos timestamps', () => {
+    const before = Date.now()
+    setSick()
+    usePetStore.setState({ inventory: { water: 0, food: 0, medicine: 1 } })
 
     const ok = usePetStore.getState().feedPet('medicine')
+
     expect(ok).toBe(true)
     expect(usePetStore.getState().inventory.medicine).toBe(0)
+    expect(usePetStore.getState().lastFedAt).toBeGreaterThanOrEqual(before)
+    expect(usePetStore.getState().lastWateredAt).toBeGreaterThanOrEqual(before)
+  })
+
+  it('retorna false para remédio quando hungry (não é sick)', () => {
+    setHungry()
+    usePetStore.setState({ inventory: { water: 3, food: 3, medicine: 3 } })
+    expect(usePetStore.getState().feedPet('medicine')).toBe(false)
   })
 })
 
@@ -190,7 +269,8 @@ describe('completedLesson', () => {
 
   it('ativa emergency rescue quando pet está sick e coins < 20', () => {
     usePetStore.setState({
-      lastFedAt: Date.now() - 50 * HOUR, // sick
+      lastFedAt: Date.now() - 25 * HOUR, // sick (fome > 24h)
+      lastWateredAt: Date.now(),
       coins: 10, // < 20 (sem dinheiro para remédio)
     })
 
@@ -198,14 +278,29 @@ describe('completedLesson', () => {
     const result = usePetStore.getState().completedLesson(5)
 
     expect(result.emergencyRescue).toBe(true)
-    // Pet foi curado: lastFedAt atualizado
+    // Pet foi curado: ambos timestamps atualizados
     expect(usePetStore.getState().lastFedAt).toBeGreaterThanOrEqual(before)
+    expect(usePetStore.getState().lastWateredAt).toBeGreaterThanOrEqual(before)
+    expect(usePetStore.getState().getPetStatus()).toBe('happy')
+  })
+
+  it('ativa emergency rescue quando sick por sede (lastWateredAt > 24h)', () => {
+    usePetStore.setState({
+      lastFedAt: Date.now(),
+      lastWateredAt: Date.now() - 25 * HOUR, // sick por sede
+      coins: 5,
+    })
+
+    const result = usePetStore.getState().completedLesson(5)
+
+    expect(result.emergencyRescue).toBe(true)
     expect(usePetStore.getState().getPetStatus()).toBe('happy')
   })
 
   it('NÃO ativa emergency rescue quando sick mas coins >= 20', () => {
     usePetStore.setState({
-      lastFedAt: Date.now() - 50 * HOUR, // sick
+      lastFedAt: Date.now() - 25 * HOUR, // sick
+      lastWateredAt: Date.now(),
       coins: 20, // tem dinheiro para remédio
     })
 
@@ -218,7 +313,8 @@ describe('completedLesson', () => {
 
   it('NÃO ativa emergency rescue quando pet está apenas hungry', () => {
     usePetStore.setState({
-      lastFedAt: Date.now() - 25 * HOUR, // hungry
+      lastFedAt: Date.now() - 13 * HOUR, // hungry
+      lastWateredAt: Date.now(),
       coins: 0,
     })
 

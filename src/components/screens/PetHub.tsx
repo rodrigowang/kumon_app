@@ -18,7 +18,7 @@ import { Button, Container, PetDisplay, StreakDisplay, TrophyDisplay } from '../
 import { useGameStore } from '../../stores/useGameStore'
 import { usePetStore } from '../../stores/usePetStore'
 import { ITEM_PRICES } from '../../lib/coinCalculator'
-import { derivePetStatus, canFeedPet, canBuyItem } from '../../lib/petActions'
+import { derivePetStatus, canFeedPet, canBuyItem, getPetStatusLabel } from '../../lib/petActions'
 
 import type { PetDisplayStatus } from '../ui'
 import type { ItemType } from '../../lib/petActions'
@@ -52,10 +52,13 @@ export default function PetHub({ onPlay, onViewProgress, onDevDashboard }: PetHu
   const resetGameProgress = useGameStore((s) => s.resetProgress)
   const subtractionBannerSeen = useGameStore((s) => s.subtractionBannerSeen)
   const dismissSubtractionBanner = useGameStore((s) => s.dismissSubtractionBanner)
+  const multiDigitBannerSeen = useGameStore((s) => s.multiDigitBannerSeen)
+  const dismissMultiDigitBanner = useGameStore((s) => s.dismissMultiDigitBanner)
 
   // Pet store
   const coins = usePetStore((s) => s.coins)
   const lastFedAt = usePetStore((s) => s.lastFedAt)
+  const lastWateredAt = usePetStore((s) => s.lastWateredAt)
   const inventory = usePetStore((s) => s.inventory)
   const streak = usePetStore((s) => s.streak)
   const hasTrophy = usePetStore((s) => s.hasTrophy7Days)
@@ -64,7 +67,7 @@ export default function PetHub({ onPlay, onViewProgress, onDevDashboard }: PetHu
   const resetPetProgress = usePetStore((s) => s.resetPetProgress)
 
   // Status derivado
-  const petStatus = derivePetStatus(lastFedAt)
+  const petStatus = derivePetStatus(lastFedAt, lastWateredAt)
 
   // Estado local: animação de eating
   const [displayStatus, setDisplayStatus] = useState<PetDisplayStatus>(petStatus)
@@ -86,7 +89,10 @@ export default function PetHub({ onPlay, onViewProgress, onDevDashboard }: PetHu
   }, [feedPet])
 
   const handleEatingEnd = useCallback(() => {
-    setDisplayStatus('happy')
+    // Re-derivar status real após animação de eating
+    const { lastFedAt: fed, lastWateredAt: wat } = usePetStore.getState()
+    const realStatus = derivePetStatus(fed, wat)
+    setDisplayStatus(realStatus)
   }, [])
 
   const handleBuy = useCallback((type: ItemType) => {
@@ -107,6 +113,7 @@ export default function PetHub({ onPlay, onViewProgress, onDevDashboard }: PetHu
 
   const needsRescueWarning = petStatus === 'sick' && coins < ITEM_PRICES.medicine
   const showSubtractionBanner = currentLevel.operation === 'subtraction' && !subtractionBannerSeen
+  const showMultiDigitBanner = currentLevel.maxResult >= 99 && !multiDigitBannerSeen
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 
@@ -193,14 +200,50 @@ export default function PetHub({ onPlay, onViewProgress, onDevDashboard }: PetHu
           </Box>
         )}
 
+        {/* ─── Banner: Multi-dígitos desbloqueados ─────────────────────── */}
+        {showMultiDigitBanner && (
+          <Box
+            data-testid="multidigit-unlock-banner"
+            style={{
+              background: 'linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%)',
+              border: '2px solid #42A5F5',
+              borderRadius: '16px',
+              padding: '16px 20px',
+              width: '100%',
+              maxWidth: '400px',
+              textAlign: 'center',
+            }}
+          >
+            <Text size="28px" mb={4}>🔢</Text>
+            <Text size="20px" fw={800} c="blue.8" mb="xs">
+              Números maiores!
+            </Text>
+            <Text size="16px" c="blue.7" mb="md">
+              Agora com dezenas e centenas! 🚀
+            </Text>
+            <Button
+              data-testid="multidigit-banner-dismiss"
+              onClick={dismissMultiDigitBanner}
+              size="md"
+              style={{
+                minHeight: '48px',
+                background: 'linear-gradient(135deg, #2196F3 0%, #1E88E5 100%)',
+                border: 'none',
+                fontWeight: 700,
+                fontSize: '18px',
+              }}
+            >
+              Entendi! Vamos lá! ✨
+            </Button>
+          </Box>
+        )}
+
         {/* ─── Pet Display ─────────────────────────────────────────────── */}
         <Box
           aria-live="polite"
           aria-label={
-            displayStatus === 'happy' ? 'Bichinho feliz' :
             displayStatus === 'eating' ? 'Bichinho comendo' :
-            displayStatus === 'hungry' ? 'Bichinho com fome' :
-            'Bichinho doente'
+            `Bichinho: ${getPetStatusLabel(displayStatus === 'eating' ? 'happy' : displayStatus)}`
           }
           style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}
         >

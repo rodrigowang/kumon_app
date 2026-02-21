@@ -106,6 +106,70 @@ describe('generateProblem', () => {
     });
   });
 
+  describe('Adição - Nível 5 (2+1 dígitos, até 99)', () => {
+    const level: MasteryLevel = {
+      operation: 'addition',
+      maxResult: 99,
+      cpaPhase: 'abstract',
+    };
+
+    it('deve gerar operandA com 2 dígitos (10-89)', () => {
+      for (let i = 0; i < 30; i++) {
+        const problem = generateProblem(level);
+        expect(problem.operandA).toBeGreaterThanOrEqual(10);
+        expect(problem.operandA).toBeLessThanOrEqual(89);
+      }
+    });
+
+    it('deve gerar operandB com 1 dígito (1-9)', () => {
+      for (let i = 0; i < 30; i++) {
+        const problem = generateProblem(level);
+        expect(problem.operandB).toBeGreaterThanOrEqual(1);
+        expect(problem.operandB).toBeLessThanOrEqual(9);
+      }
+    });
+
+    it('deve respeitar maxResult = 99', () => {
+      for (let i = 0; i < 30; i++) {
+        const problem = generateProblem(level);
+        expect(problem.correctAnswer).toBeGreaterThanOrEqual(1);
+        expect(problem.correctAnswer).toBeLessThanOrEqual(99);
+      }
+    });
+  });
+
+  describe('Adição - Nível 6 (3+1 dígitos, até 999)', () => {
+    const level: MasteryLevel = {
+      operation: 'addition',
+      maxResult: 999,
+      cpaPhase: 'abstract',
+    };
+
+    it('deve gerar operandA com 3 dígitos (100-989)', () => {
+      for (let i = 0; i < 30; i++) {
+        const problem = generateProblem(level);
+        expect(problem.operandA).toBeGreaterThanOrEqual(100);
+        expect(problem.operandA).toBeLessThanOrEqual(989);
+      }
+    });
+
+    it('deve gerar operandB com 1 dígito (1-9)', () => {
+      for (let i = 0; i < 30; i++) {
+        const problem = generateProblem(level);
+        expect(problem.operandB).toBeGreaterThanOrEqual(1);
+        expect(problem.operandB).toBeLessThanOrEqual(9);
+      }
+    });
+
+    it('deve respeitar maxResult = 999', () => {
+      for (let i = 0; i < 30; i++) {
+        const problem = generateProblem(level);
+        expect(problem.correctAnswer).toBeGreaterThanOrEqual(1);
+        expect(problem.correctAnswer).toBeLessThanOrEqual(999);
+      }
+    });
+  });
+
   describe('Subtração - Nível 1 (até 5)', () => {
     const level: MasteryLevel = {
       operation: 'subtraction',
@@ -196,6 +260,70 @@ describe('generateProblem', () => {
         const problem = generateProblem(level);
         expect(problem.correctAnswer).toBeGreaterThanOrEqual(0);
         expect(problem.correctAnswer).toBeLessThanOrEqual(20);
+      }
+    });
+  });
+
+  describe('Subtração - Nível 5 (2 dígitos - 1 dígito, até 99)', () => {
+    const level: MasteryLevel = {
+      operation: 'subtraction',
+      maxResult: 99,
+      cpaPhase: 'abstract',
+    };
+
+    it('deve gerar minuendo com 2 dígitos (11-99)', () => {
+      for (let i = 0; i < 30; i++) {
+        const problem = generateProblem(level);
+        expect(problem.operandA).toBeGreaterThanOrEqual(11);
+        expect(problem.operandA).toBeLessThanOrEqual(99);
+      }
+    });
+
+    it('deve gerar subtraendo com 1 dígito (1-9)', () => {
+      for (let i = 0; i < 30; i++) {
+        const problem = generateProblem(level);
+        expect(problem.operandB).toBeGreaterThanOrEqual(1);
+        expect(problem.operandB).toBeLessThanOrEqual(9);
+      }
+    });
+
+    it('nunca deve gerar resultado negativo', () => {
+      for (let i = 0; i < 30; i++) {
+        const problem = generateProblem(level);
+        expect(problem.correctAnswer).toBeGreaterThanOrEqual(0);
+        expect(problem.operandA).toBeGreaterThan(problem.operandB);
+      }
+    });
+  });
+
+  describe('Subtração - Nível 6 (3 dígitos - 1 dígito, até 999)', () => {
+    const level: MasteryLevel = {
+      operation: 'subtraction',
+      maxResult: 999,
+      cpaPhase: 'abstract',
+    };
+
+    it('deve gerar minuendo com 3 dígitos (101-999)', () => {
+      for (let i = 0; i < 30; i++) {
+        const problem = generateProblem(level);
+        expect(problem.operandA).toBeGreaterThanOrEqual(101);
+        expect(problem.operandA).toBeLessThanOrEqual(999);
+      }
+    });
+
+    it('deve gerar subtraendo com 1 dígito (1-9)', () => {
+      for (let i = 0; i < 30; i++) {
+        const problem = generateProblem(level);
+        expect(problem.operandB).toBeGreaterThanOrEqual(1);
+        expect(problem.operandB).toBeLessThanOrEqual(9);
+      }
+    });
+
+    it('nunca deve gerar resultado negativo', () => {
+      for (let i = 0; i < 30; i++) {
+        const problem = generateProblem(level);
+        expect(problem.correctAnswer).toBeGreaterThanOrEqual(0);
+        expect(problem.operandA).toBeGreaterThan(problem.operandB);
       }
     });
   });

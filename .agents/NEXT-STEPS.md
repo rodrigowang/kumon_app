@@ -231,6 +231,160 @@ streak.lastLessonDate = today
 
 ---
 
+## Sprint 5 — Progressão Multi-Dígitos + Mecânicas do Pet ← PRÓXIMA
+
+> Dois objetivos paralelos: ampliar o alcance matemático para operações com 2 e 3 dígitos, e tornar o cuidado do pet mais rico com o estado de sede independente da fome.
+
+---
+
+### 5.1 — Progressão Multi-Dígitos (2+1 e 3+1 dígitos)
+
+**Motivação:** hoje soma e subtração evoluem apenas dentro de resultados até 20 (1 dígito + 1 dígito). Queremos continuar a progressão natural para operações com dezenas e centenas.
+
+**Auditoria OCR concluída:** o pipeline já suporta 3 dígitos sem nenhuma mudança. `segmentDigits`, `predictDigits` e `predictionsToNumber` são agnósticos à quantidade de dígitos.
+
+**Nova tabela de níveis:**
+
+| Nível | maxResult | Tipo de operação | Exemplo | Moedas/acerto |
+|-------|-----------|-----------------|---------|---------------|
+| 1 | 5 | 1+1 dígitos | 2+3 | 1c |
+| 2 | 10 | 1+1 dígitos | 7+3 | 1c |
+| 3 | 15 | 1+1 dígitos | 8+7 | 3c |
+| 4 | 20 | 1+1 dígitos | 9+9 | 3c |
+| 5 | 99 | 2+1 dígitos | 45+8 | 8c |
+| 6 | 999 | 3+1 dígitos | 247+5 | 15c |
+
+Mesma lógica para subtração (ex: 73-6, 452-8).
+
+**Passo a passo de implementação:**
+
+**Passo 1 — `src/types/mastery.ts`**
+- Estender `MICROLEVEL_PROGRESSION`:
+  ```ts
+  addition:    [5, 10, 15, 20, 99, 999]
+  subtraction: [5, 10, 15, 20, 99, 999]
+  ```
+- Nenhuma outra mudança neste arquivo.
+
+**Passo 2 — `src/lib/math/generateProblem.ts`**
+- Adicionar 2 novos blocos em `getAdditionConfig()`:
+  ```
+  maxResult <= 99:  operandA 10–89, operandB 1–9  (2+1 dígitos)
+  maxResult <= 999: operandA 100–989, operandB 1–9 (3+1 dígitos)
+  ```
+- Adicionar 2 novos blocos em `getSubtractionConfig()`:
+  ```
+  maxResult <= 99:  minuend 11–99, subtrahend 1–9  (resultado ≥ 1)
+  maxResult <= 999: minuend 101–999, subtrahend 1–9 (resultado ≥ 1)
+  ```
+- Garantir que `isValidResult` e `isValidOperands` continuam funcionando (sem negativos).
+
+**Passo 3 — `src/lib/coinCalculator.ts`**
+- Atualizar `getCoinsPerCorrect()`:
+  ```ts
+  maxResult <= 10  → 1c
+  maxResult <= 20  → 3c
+  maxResult <= 99  → 8c   ← novo
+  maxResult <= 999 → 15c  ← novo
+  ```
+
+**Passo 4 — Verificar banner de desbloqueio (`PetHub.tsx`)**
+- Hoje existe banner "Agora vamos subtrair!" para transição adição→subtração.
+- Avaliar se vale adicionar banner "Números maiores!" ao desbloquear nível 5 (maxResult=99).
+- Decisão: sim, mesma mecânica do `subtractionBannerSeen`.
+
+**Passo 5 — Testes unitários**
+- Atualizar testes de `generateProblem` para cobrir os novos níveis.
+- Atualizar testes de `coinCalculator` para cobrir `maxResult=99` e `maxResult=999`.
+- Testar que `advanceMicrolevel()` progride corretamente de 20→99→999.
+
+**Arquivos modificados:**
+- `src/types/mastery.ts`
+- `src/lib/math/generateProblem.ts`
+- `src/lib/coinCalculator.ts`
+- `src/components/screens/PetHub.tsx` (banner opcional)
+- `tests/unit/coinCalculator.spec.ts`
+- `tests/unit/generateProblem.spec.ts` (se existir)
+
+> **Critério de done:** criança que completa soma/subtração nível 4 (maxResult=20, abstract) avança para exercícios tipo "45+8". Moedas sobem de 3c para 8c. Build sem erros TypeScript.
+
+---
+
+### 5.2 — Estado de Sede (separado da Fome)
+
+**Motivação:** água e comida hoje são intercambiáveis para `hungry`. Com sede como estado independente, cada item tem propósito único — mais engajamento e razão para comprar ambos.
+
+**Nota sobre timing:** pet começa com fome (`lastFedAt: 0`) mas com sede defasada (`lastWateredAt: Date.now() - 6 * 3600 * 1000`) para que os estados não apareçam sempre simultaneamente.
+
+**Novos estados derivados em runtime:**
+| Estado | Condição |
+|--------|----------|
+| `happy` | alimentado E hidratado (ambos < 12h) |
+| `hungry` | fome (12–24h sem comer), mas hidratado |
+| `thirsty` | sede (12–24h sem beber), mas alimentado |
+| `hungry_and_thirsty` | fome E sede simultaneamente |
+| `sick` | qualquer um dos dois > 24h sem atenção |
+
+**Regras de item:**
+| Item | Cura |
+|------|------|
+| 💧 Água | `thirsty` e `hungry_and_thirsty` (atualiza `lastWateredAt`) |
+| 🍎 Comida | `hungry` e `hungry_and_thirsty` (atualiza `lastFedAt`) |
+| 💊 Remédio | `sick` (restaura ambos `lastFedAt` e `lastWateredAt`) |
+
+**Passo a passo de implementação:**
+
+**Passo 1 — `src/lib/petActions.ts`**
+- Adicionar `PetStatus`: `'thirsty' | 'hungry_and_thirsty'` aos tipos existentes.
+- Alterar assinatura de `derivePetStatus(lastFedAt, lastWateredAt)`.
+- Lógica:
+  ```ts
+  const hungry = elapsed(lastFedAt) > 12h
+  const thirsty = elapsed(lastWateredAt) > 12h
+  const fedSick = elapsed(lastFedAt) > 24h
+  const waterSick = elapsed(lastWateredAt) > 24h
+  if (fedSick || waterSick) return 'sick'
+  if (hungry && thirsty) return 'hungry_and_thirsty'
+  if (hungry) return 'hungry'
+  if (thirsty) return 'thirsty'
+  return 'happy'
+  ```
+- Atualizar `canFeedPet()`: água só funciona se status inclui sede; comida só se inclui fome.
+- Atualizar `getPetStatusLabel()` com os novos estados.
+
+**Passo 2 — `src/stores/usePetStore.ts`**
+- Adicionar campo `lastWateredAt: number` ao estado.
+- Estado inicial: `lastWateredAt: Date.now() - 6 * 3600 * 1000` (defasado 6h).
+- Atualizar `feedPet('water')` → atualiza `lastWateredAt`.
+- Atualizar `feedPet('food')` → atualiza `lastFedAt` (sem mudança, já faz isso).
+- Atualizar `feedPet('medicine')` → atualiza ambos.
+- Atualizar `completedLesson()` → emergency rescue verifica `lastWateredAt` também.
+- Atualizar `getPetStatus()` → passa ambos os timestamps.
+- Adicionar `lastWateredAt` ao `partialize` (persistir).
+
+**Passo 3 — `src/components/screens/PetHub.tsx`**
+- Botão "Usar Água" habilitado se status é `thirsty` ou `hungry_and_thirsty`.
+- Botão "Usar Comida" habilitado se status é `hungry` ou `hungry_and_thirsty`.
+- Label de status exibe os novos estados.
+
+**Passo 4 — `src/components/ui/PetDisplay.tsx`**
+- Sprite `hungry_and_thirsty` → reusar sprite `hungry` (ou criar variação CSS).
+
+**Passo 5 — Testes unitários**
+- Atualizar testes de `petActions` para cobrir os 5 estados.
+- Testar `canFeedPet` para todas as combinações (água em `thirsty`, `hungry`, `sick`, `happy`).
+
+**Arquivos modificados:**
+- `src/lib/petActions.ts`
+- `src/stores/usePetStore.ts`
+- `src/components/screens/PetHub.tsx`
+- `src/components/ui/PetDisplay.tsx`
+- `tests/unit/petActions.spec.ts`
+
+> **Critério de done:** água só resolve sede, comida só resolve fome. Remédio cura os dois. Pet começa com fome (imediato) e fica com sede ~6h depois. Build sem erros TypeScript.
+
+---
+
 ## Fora do Escopo deste MVP (não implementar agora)
 
 - **PixiJS** — CSS + GIF resolve sem adicionar 4MB ao bundle
@@ -271,4 +425,4 @@ Sprint 4 (polimento):
 
 ---
 
-**Última atualização**: 2026-02-20 (Audit de bugs concluído — 0 erros TS)
+**Última atualização**: 2026-02-21 (Sprint 5 especificada: multi-dígitos 5.1 + sede 5.2)

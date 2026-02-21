@@ -37,17 +37,27 @@ describe('getCoinsPerCorrect', () => {
     expect(getCoinsPerCorrect(makeLevel(20))).toBe(3)
   })
 
-  it('retorna 5 moedas para maxResult = 21 (difícil)', () => {
-    expect(getCoinsPerCorrect(makeLevel(21))).toBe(5)
+  it('retorna 8 moedas para maxResult = 21 (2+1 dígitos)', () => {
+    expect(getCoinsPerCorrect(makeLevel(21))).toBe(8)
   })
 
-  it('retorna 5 moedas para maxResult = 30 (difícil extremo)', () => {
-    expect(getCoinsPerCorrect(makeLevel(30))).toBe(5)
+  it('retorna 8 moedas para maxResult = 99 (fronteira 2+1 dígitos)', () => {
+    expect(getCoinsPerCorrect(makeLevel(99))).toBe(8)
+  })
+
+  it('retorna 15 moedas para maxResult = 100 (3+1 dígitos)', () => {
+    expect(getCoinsPerCorrect(makeLevel(100))).toBe(15)
+  })
+
+  it('retorna 15 moedas para maxResult = 999 (3+1 dígitos)', () => {
+    expect(getCoinsPerCorrect(makeLevel(999))).toBe(15)
   })
 
   it('funciona igualmente para subtração', () => {
     expect(getCoinsPerCorrect(makeLevel(10, 'subtraction'))).toBe(1)
     expect(getCoinsPerCorrect(makeLevel(15, 'subtraction'))).toBe(3)
+    expect(getCoinsPerCorrect(makeLevel(99, 'subtraction'))).toBe(8)
+    expect(getCoinsPerCorrect(makeLevel(999, 'subtraction'))).toBe(15)
   })
 })
 

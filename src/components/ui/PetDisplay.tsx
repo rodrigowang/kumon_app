@@ -4,10 +4,12 @@
  * Renderiza o gatinho com a animação correta para cada estado.
  * Sprites: CC0 "Tiny Cat Sprite" (OpenGameArt.org)
  *
- * - happy  → animação idle (loop)
- * - hungry → animação hurt (loop devagar)
- * - sick   → animação dead (loop bem devagar)
- * - eating → animação run (auto-retorna para happy após 1.2s)
+ * - happy            → animação idle (loop)
+ * - hungry           → animação hurt (loop devagar)
+ * - thirsty          → animação hurt (reutilizada, moldura azul)
+ * - hungry_and_thirsty → animação hurt (reutilizada, moldura laranja)
+ * - sick             → animação dead (loop bem devagar)
+ * - eating           → animação run (auto-retorna para estado real após 1.2s)
  */
 
 import { useState, useEffect, useRef } from 'react'
@@ -53,6 +55,18 @@ const STATUS_CONFIG: Record<PetDisplayStatus, StatusConfig> = {
     label: 'Com fome... 😢',
     bgColor: '#FFF8E1',
     borderColor: '#FFC107',
+  },
+  thirsty: {
+    gif: petHungryGif,
+    label: 'Com sede... 💧',
+    bgColor: '#E3F2FD',
+    borderColor: '#42A5F5',
+  },
+  hungry_and_thirsty: {
+    gif: petHungryGif,
+    label: 'Com fome e sede! 😢💧',
+    bgColor: '#FFF3E0',
+    borderColor: '#FF9800',
   },
   sick: {
     gif: petSickGif,

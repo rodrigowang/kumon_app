@@ -10,8 +10,17 @@ import type { ItemType } from './coinCalculator'
 
 export type { ItemType }
 
-/** Estado derivado em runtime a partir de lastFedAt — nunca persiste diretamente */
-export type PetStatus = 'happy' | 'hungry' | 'sick'
+/**
+ * Estado derivado em runtime a partir de lastFedAt + lastWateredAt.
+ * Nunca persiste diretamente.
+ *
+ * - happy: alimentado E hidratado
+ * - hungry: precisa de comida (mas hidratado)
+ * - thirsty: precisa de água (mas alimentado)
+ * - hungry_and_thirsty: precisa de ambos
+ * - sick: qualquer um dos dois ultrapassou 24h
+ */
+export type PetStatus = 'happy' | 'hungry' | 'thirsty' | 'hungry_and_thirsty' | 'sick'
 
 export interface PetInventory {
   water: number
@@ -22,18 +31,30 @@ export interface PetInventory {
 /** Limites de tempo para cada estado */
 const STATUS_THRESHOLDS = {
   HAPPY_MAX_MS: 12 * 60 * 60 * 1000, // 12h
-  HUNGRY_MAX_MS: 24 * 60 * 60 * 1000, // 24h
+  NEED_MAX_MS: 24 * 60 * 60 * 1000, // 24h — após isso, fica doente
 }
 
 /**
- * Deriva o status atual do pet a partir do timestamp da última alimentação.
+ * Deriva o status atual do pet a partir dos timestamps de alimentação e hidratação.
  * Esta é a única fonte de verdade — nunca salvar o status diretamente.
  */
-export function derivePetStatus(lastFedAt: number): PetStatus {
-  const elapsed = Date.now() - lastFedAt
-  if (elapsed <= STATUS_THRESHOLDS.HAPPY_MAX_MS) return 'happy'
-  if (elapsed <= STATUS_THRESHOLDS.HUNGRY_MAX_MS) return 'hungry'
-  return 'sick'
+export function derivePetStatus(lastFedAt: number, lastWateredAt: number): PetStatus {
+  const now = Date.now()
+  const fedElapsed = now - lastFedAt
+  const wateredElapsed = now - lastWateredAt
+
+  // Doente: qualquer necessidade ultrapassou 24h
+  if (fedElapsed > STATUS_THRESHOLDS.NEED_MAX_MS || wateredElapsed > STATUS_THRESHOLDS.NEED_MAX_MS) {
+    return 'sick'
+  }
+
+  const isHungry = fedElapsed > STATUS_THRESHOLDS.HAPPY_MAX_MS
+  const isThirsty = wateredElapsed > STATUS_THRESHOLDS.HAPPY_MAX_MS
+
+  if (isHungry && isThirsty) return 'hungry_and_thirsty'
+  if (isHungry) return 'hungry'
+  if (isThirsty) return 'thirsty'
+  return 'happy'
 }
 
 /**
@@ -41,8 +62,9 @@ export function derivePetStatus(lastFedAt: number): PetStatus {
  *
  * Regras:
  * - Pet feliz recusa qualquer item (já está saciado)
- * - Remédio funciona em `hungry` e `sick`
- * - Água e comida funcionam em `hungry` (não curam doença)
+ * - Remédio funciona em qualquer estado não-feliz (cura sick)
+ * - Água funciona quando o pet está com sede (thirsty ou hungry_and_thirsty)
+ * - Comida funciona quando o pet está com fome (hungry ou hungry_and_thirsty)
  * - Inventário deve ter pelo menos 1 unidade do item
  */
 export function canFeedPet(
@@ -52,9 +74,18 @@ export function canFeedPet(
 ): boolean {
   if (status === 'happy') return false
   if (inventory[type] <= 0) return false
-  // Água e comida não curam doença (estado `sick`)
-  if (type !== 'medicine' && status === 'sick') return false
-  return true
+
+  if (type === 'medicine') return status === 'sick'
+
+  if (type === 'water') {
+    return status === 'thirsty' || status === 'hungry_and_thirsty'
+  }
+
+  if (type === 'food') {
+    return status === 'hungry' || status === 'hungry_and_thirsty'
+  }
+
+  return false
 }
 
 /**
@@ -73,6 +104,10 @@ export function getPetStatusLabel(status: PetStatus): string {
       return 'Feliz! 😊'
     case 'hungry':
       return 'Com fome... 😢'
+    case 'thirsty':
+      return 'Com sede... 💧'
+    case 'hungry_and_thirsty':
+      return 'Com fome e sede! 😢💧'
     case 'sick':
       return 'Doentinho 🤒'
   }

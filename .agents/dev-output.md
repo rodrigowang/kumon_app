@@ -1,3 +1,89 @@
+# Dev Output — Sprint 5.2: Estado de Sede (separado da Fome)
+
+**Data**: 2026-02-21
+**Task**: Separar sede da fome — água cura sede, comida cura fome, remédio cura sick
+**Status**: ✅ Concluído — **0 erros TypeScript, build OK**
+
+## Arquivos Modificados
+
+| Arquivo | O que mudou |
+|---------|-------------|
+| `src/lib/petActions.ts` | 5 estados: happy/hungry/thirsty/hungry_and_thirsty/sick. `derivePetStatus(lastFedAt, lastWateredAt)` com 2 args. `canFeedPet`: água→sede, comida→fome, remédio→sick. Thresholds: 12h hungry/thirsty, 24h sick |
+| `src/stores/usePetStore.ts` | `lastWateredAt` no estado. Defasagem 6h para sede não aparecer junto com fome. `feedPet`: água→lastWateredAt, comida→lastFedAt, remédio→ambos. Emergency rescue atualiza ambos. `partialize` inclui lastWateredAt |
+| `src/components/screens/PetHub.tsx` | Lê `lastWateredAt` da store, passa para `derivePetStatus`. `handleEatingEnd` re-deriva status real |
+| `src/components/ui/PetDisplay.tsx` | Novos configs: thirsty (azul, petHungryGif), hungry_and_thirsty (laranja, petHungryGif) |
+| `tests/unit/petActions.spec.ts` | Reescrito: testa 5 estados, `derivePetStatus` com 2 args, `canFeedPet` com regras separadas (água→sede, comida→fome, remédio→só sick), fronteiras 12h |
+| `tests/unit/petStore.spec.ts` | Reescrito: helpers setHappy/setHungry/setThirsty/setSick, testa feedPet com água/comida/remédio separados, emergency rescue por sede, lastWateredAt atualizado |
+
+## Estados do Pet
+
+| Estado | Condição | Itens que funcionam |
+|--------|----------|-------------------|
+| happy | fed < 12h E watered < 12h | Nenhum (recusa) |
+| hungry | fed > 12h, watered < 12h | Comida |
+| thirsty | watered > 12h, fed < 12h | Água |
+| hungry_and_thirsty | fed > 12h E watered > 12h | Comida, Água |
+| sick | fed > 24h OU watered > 24h | Remédio |
+
+## Decisões Técnicas
+
+- **Defasagem de 6h**: `lastWateredAt = Date.now() - 6h` no estado inicial, para que sede não apareça junto com fome
+- **Remédio só cura sick** (antes curava hungry também) — mais estratégico
+- **PetDisplay reutiliza petHungryGif** para thirsty/hungry_and_thirsty com cores de borda diferentes (azul/laranja)
+- **Emergency rescue atualiza ambos timestamps** (lastFedAt + lastWateredAt)
+- **Vitest não instalado** — testes escritos e prontos, build TypeScript valida tipos
+
+---
+
+# Dev Output — Sprint 5.1: Progressão Multi-Dígitos (2+1 e 3+1 dígitos)
+
+**Data**: 2026-02-21
+**Task**: Estender progressão para operações com dezenas e centenas; mais moedas por nível
+**Status**: ✅ Concluído — **0 erros TypeScript, build OK**
+
+## Arquivos Modificados
+
+| Arquivo | O que mudou |
+|---------|-------------|
+| `src/types/mastery.ts` | `MICROLEVEL_PROGRESSION`: `[5,10,15,20]` → `[5,10,15,20,99,999]` para ambas operações |
+| `src/lib/math/generateProblem.ts` | Novos configs em `getAdditionConfig()` e `getSubtractionConfig()` para maxResult 99 (2+1 dígitos) e 999 (3+1 dígitos) |
+| `src/lib/coinCalculator.ts` | Novos tiers: `≤99 → 8c`, `≥100 → 15c` |
+| `src/stores/useGameStore.ts` | `multiDigitBannerSeen` (persist) + `dismissMultiDigitBanner()` |
+| `src/components/screens/PetHub.tsx` | Banner "Números maiores!" (azul) ao desbloquear maxResult≥99 |
+| `tests/unit/coinCalculator.spec.ts` | Testes para novos tiers (8c e 15c) |
+| `tests/unit/generateProblem.spec.ts` | Testes para adição/subtração níveis 5 (2+1) e 6 (3+1) |
+| `tests/unit/progression-engine.spec.ts` | Testes atualizados: transição adição→subtração agora requer maxResult=999; testes novos para 20→99 e 99→999 |
+
+## Nova Tabela de Progressão
+
+| Nível | maxResult | Tipo | Exemplo | Moedas/acerto |
+|-------|-----------|------|---------|---------------|
+| 1 | 5 | 1+1 dig | 2+3 | 1c |
+| 2 | 10 | 1+1 dig | 7+3 | 1c |
+| 3 | 15 | 1+1 dig | 8+7 | 3c |
+| 4 | 20 | 1+1 dig | 9+9 | 3c |
+| 5 | 99 | 2+1 dig | 45+8 | 8c |
+| 6 | 999 | 3+1 dig | 247+5 | 15c |
+
+## Configs de Geração
+
+### Adição
+- `maxResult ≤ 99`: operandA 10–89, operandB 1–9
+- `maxResult ≤ 999`: operandA 100–989, operandB 1–9
+
+### Subtração
+- `maxResult ≤ 99`: minuendo 11–99, subtraendo 1–9
+- `maxResult ≤ 999`: minuendo 101–999, subtraendo 1–9
+
+## Decisões Técnicas
+
+- **OCR não precisou de mudança** — pipeline já suportava 3+ dígitos (auditado antes de implementar)
+- **Transição adição→subtração agora requer maxResult=999** (antes era 20)
+- **Banner multi-dígitos**: azul (distinto do verde do banner de subtração), aparece 1x ao atingir maxResult≥99
+- **Vitest não instalado** — testes escritos e prontos, build TypeScript valida tipos
+
+---
+
 # Dev Output — Sprint 4.3: Acessibilidade
 
 **Data**: 2026-02-21

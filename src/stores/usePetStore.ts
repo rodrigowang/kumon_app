@@ -2,7 +2,7 @@
  * usePetStore — Estado global do bichinho virtual
  *
  * Regras críticas:
- * - NUNCA persiste `status` — sempre derivado de `lastFedAt` em runtime
+ * - NUNCA persiste `status` — sempre derivado de `lastFedAt` + `lastWateredAt` em runtime
  * - `completedLesson()` é a única porta de entrada de moedas
  * - Emergency rescue: pet doente + moedas insuficientes → cura automática ao completar lição
  */
@@ -24,8 +24,10 @@ export type { PetStatus, PetInventory, ItemType }
 interface PetState {
   /** Saldo de moedas da criança */
   coins: number
-  /** Timestamp (ms) da última alimentação — base para derivar status */
+  /** Timestamp (ms) da última alimentação — base para derivar fome */
   lastFedAt: number
+  /** Timestamp (ms) da última hidratação — base para derivar sede */
+  lastWateredAt: number
   /** Itens disponíveis no inventário */
   inventory: PetInventory
   /** Progresso de dias consecutivos */
@@ -51,7 +53,10 @@ interface PetActions {
 
   /**
    * Alimenta o pet com o item especificado.
-   * @returns `true` se alimentou com sucesso, `false` se recusado (pet feliz, sem estoque, item errado para o estado)
+   * - Água: atualiza lastWateredAt (cura sede)
+   * - Comida: atualiza lastFedAt (cura fome)
+   * - Remédio: atualiza ambos (cura doença)
+   * @returns `true` se alimentou com sucesso, `false` se recusado
    */
   feedPet: (type: ItemType) => boolean
 
@@ -86,10 +91,14 @@ export interface CompletedLessonResult {
 
 // ─── Estado inicial ────────────────────────────────────────────────────────────
 
+/** Defasagem de 6h para que sede e fome não apareçam ao mesmo tempo */
+const THIRST_OFFSET_MS = 6 * 60 * 60 * 1000
+
 function makeInitialState(): PetState {
   return {
     coins: 0,
     lastFedAt: 0, // Pet começa com fome
+    lastWateredAt: Date.now() - THIRST_OFFSET_MS, // Sede aparece ~6h depois
     inventory: { water: 0, food: 0, medicine: 0 },
     streak: { current: 0, lastLessonDate: '' },
     hasTrophy7Days: false,
@@ -104,18 +113,30 @@ export const usePetStore = create<PetState & PetActions>()(
     (set, get) => ({
       ...makeInitialState(),
 
-      getPetStatus: () => derivePetStatus(get().lastFedAt),
+      getPetStatus: () => derivePetStatus(get().lastFedAt, get().lastWateredAt),
 
       feedPet: (type: ItemType): boolean => {
-        const { inventory, lastFedAt } = get()
-        const status = derivePetStatus(lastFedAt)
+        const { inventory, lastFedAt, lastWateredAt } = get()
+        const status = derivePetStatus(lastFedAt, lastWateredAt)
 
         if (!canFeedPet(status, inventory, type)) return false
 
-        set({
+        const now = Date.now()
+        const updates: Partial<PetState> = {
           inventory: { ...inventory, [type]: inventory[type] - 1 },
-          lastFedAt: Date.now(),
-        })
+        }
+
+        if (type === 'water') {
+          updates.lastWateredAt = now
+        } else if (type === 'food') {
+          updates.lastFedAt = now
+        } else {
+          // medicine: restaura ambos os timers
+          updates.lastFedAt = now
+          updates.lastWateredAt = now
+        }
+
+        set(updates)
         return true
       },
 
@@ -132,8 +153,8 @@ export const usePetStore = create<PetState & PetActions>()(
       },
 
       completedLesson: (coinsEarned: number): CompletedLessonResult => {
-        const { coins, lastFedAt, streak, hasTrophy7Days } = get()
-        const status = derivePetStatus(lastFedAt)
+        const { coins, lastFedAt, lastWateredAt, streak, hasTrophy7Days } = get()
+        const status = derivePetStatus(lastFedAt, lastWateredAt)
 
         // 1. Calcular novo streak
         const newStreak = updateStreak(streak)
@@ -146,12 +167,15 @@ export const usePetStore = create<PetState & PetActions>()(
         // 3. Emergency rescue — verificar ANTES de creditar moedas
         // Condição: pet doente E moedas atuais insuficientes para remédio
         const needsRescue = status === 'sick' && coins < ITEM_PRICES.medicine
-        const newLastFedAt = needsRescue ? Date.now() : lastFedAt
+        const now = Date.now()
+        const newLastFedAt = needsRescue ? now : lastFedAt
+        const newLastWateredAt = needsRescue ? now : lastWateredAt
 
         // 4. Creditar moedas + aplicar todas as mudanças atomicamente
         set({
           coins: coins + coinsEarned,
           lastFedAt: newLastFedAt,
+          lastWateredAt: newLastWateredAt,
           streak: newStreak,
           hasTrophy7Days: newHasTrophy,
           lastLessonEmergencyRescue: needsRescue,
@@ -172,10 +196,11 @@ export const usePetStore = create<PetState & PetActions>()(
     {
       name: 'kumon-pet-storage',
       storage: createJSONStorage(() => localStorage),
-      // Status nunca é persistido — sempre derivado de lastFedAt
+      // Status nunca é persistido — sempre derivado de lastFedAt + lastWateredAt
       partialize: (state) => ({
         coins: state.coins,
         lastFedAt: state.lastFedAt,
+        lastWateredAt: state.lastWateredAt,
         inventory: state.inventory,
         streak: state.streak,
         hasTrophy7Days: state.hasTrophy7Days,

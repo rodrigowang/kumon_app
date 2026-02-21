@@ -50,7 +50,8 @@ App web educacional (React 18 + TS + Vite + Mantine + Zustand + TensorFlow.js) p
    - Links: progresso, dev, resetar
 
 2. **Bichinho Virtual** (`src/stores/usePetStore.ts`)
-   - Status derivado em runtime: happy (0-24h), hungry (24-48h), sick (>48h)
+   - Status derivado em runtime: happy (0-12h), hungry (12-24h), sick (>24h)
+   - Pet **começa com fome** (`lastFedAt: 0`) — não começa feliz
    - `coins`, `inventory`, `streak`, `hasTrophy7Days`
    - `feedPet(type)`: água/comida só cura `hungry`; remédio cura `sick` e `hungry`
    - `buyItem(type)`: valida saldo, debita moedas
@@ -135,7 +136,7 @@ src/
 ```
 
 ### Próximo Passo
-**Sprint 4.3** — Acessibilidade (ARIA labels, contraste WCAG AA, teclado)
+**Sprint 5.1** — Estado de sede no pet (novo timer independente `lastWateredAt`)
 
 ### Sprint 4.2 ✅
 - Vitest 2.1.9 instalado (Node 18 compat) — package-lock.json root-owned, instalar em /tmp e copiar

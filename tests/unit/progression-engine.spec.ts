@@ -151,7 +151,7 @@ describe('Motor de Progressão - Integração Completa', () => {
       });
 
       it('subtração nunca deve gerar resultado negativo', () => {
-        const levels = [5, 10, 15, 20];
+        const levels = [5, 10, 15, 20, 99, 999];
 
         for (const maxResult of levels) {
           const level: MasteryLevel = {
@@ -465,10 +465,10 @@ describe('Motor de Progressão - Integração Completa', () => {
     });
 
     describe('Avanço de Operação: adição → subtração (Sprint 4.1)', () => {
-      it('deve avançar para subtração ao atingir maestria máxima em adição', () => {
+      it('deve avançar para subtração ao atingir maestria máxima em adição (maxResult=999)', () => {
         const tracker = new MasteryTracker({
           operation: 'addition',
-          maxResult: 20,
+          maxResult: 999,
           cpaPhase: 'abstract',
         });
 
@@ -495,7 +495,7 @@ describe('Motor de Progressão - Integração Completa', () => {
       it('subtração começa no nível mais básico (maxResult=5, concrete)', () => {
         const tracker = new MasteryTracker({
           operation: 'addition',
-          maxResult: 20,
+          maxResult: 999,
           cpaPhase: 'abstract',
         });
 
@@ -515,10 +515,54 @@ describe('Motor de Progressão - Integração Completa', () => {
         expect(newLevel.maxResult).toBe(5);
       });
 
+      it('avança de maxResult=20 para maxResult=99 dentro da mesma operação', () => {
+        const tracker = new MasteryTracker({
+          operation: 'addition',
+          maxResult: 20,
+          cpaPhase: 'abstract',
+        });
+
+        for (let i = 0; i < 5; i++) {
+          tracker.addResult({
+            correct: true,
+            speed: 'fast',
+            timeMs: 2000,
+            attempts: 1,
+            timestamp: Date.now(),
+          });
+        }
+
+        const analysis = tracker.analyze();
+        expect(analysis.newLevel?.operation).toBe('addition'); // continua em adição
+        expect(analysis.newLevel?.maxResult).toBe(99); // avançou para 2+1 dígitos
+      });
+
+      it('avança de maxResult=99 para maxResult=999 dentro da mesma operação', () => {
+        const tracker = new MasteryTracker({
+          operation: 'addition',
+          maxResult: 99,
+          cpaPhase: 'abstract',
+        });
+
+        for (let i = 0; i < 5; i++) {
+          tracker.addResult({
+            correct: true,
+            speed: 'fast',
+            timeMs: 2000,
+            attempts: 1,
+            timestamp: Date.now(),
+          });
+        }
+
+        const analysis = tracker.analyze();
+        expect(analysis.newLevel?.operation).toBe('addition'); // continua em adição
+        expect(analysis.newLevel?.maxResult).toBe(999); // avançou para 3+1 dígitos
+      });
+
       it('NÃO avança para subtração se não estiver no último nível de adição', () => {
         const tracker = new MasteryTracker({
           operation: 'addition',
-          maxResult: 15, // não é o último (seria 20)
+          maxResult: 15, // não é o último (seria 999)
           cpaPhase: 'abstract',
         });
 
@@ -549,40 +593,40 @@ describe('Motor de Progressão - Integração Completa', () => {
 
         expect(canAdvanceOperation(level1)).toBe(false);
 
-        // Avançou para maxResult=20, mas ainda em pictorial
+        // Avançou para maxResult=999, mas ainda em pictorial
         const level2: MasteryLevel = {
           operation: 'addition',
-          maxResult: 20,
+          maxResult: 999,
           cpaPhase: 'pictorial',
         };
 
         expect(canAdvanceOperation(level2)).toBe(false);
 
-        // Maestria completa: maxResult=20 E abstract
+        // Maestria completa: maxResult=999 E abstract
         const level3: MasteryLevel = {
           operation: 'addition',
-          maxResult: 20,
+          maxResult: 999,
           cpaPhase: 'abstract',
         };
 
         expect(canAdvanceOperation(level3)).toBe(true);
       });
 
-      it('deve exigir AMBOS maxResult=20 E cpaPhase=abstract', () => {
-        // Apenas maxResult=20
+      it('deve exigir AMBOS maxResult=999 E cpaPhase=abstract', () => {
+        // Apenas maxResult=999
         expect(
           canAdvanceOperation({
             operation: 'addition',
-            maxResult: 20,
+            maxResult: 999,
             cpaPhase: 'concrete',
           })
         ).toBe(false);
 
-        // Apenas cpaPhase=abstract
+        // Apenas cpaPhase=abstract mas maxResult=20 (não é o último)
         expect(
           canAdvanceOperation({
             operation: 'addition',
-            maxResult: 15,
+            maxResult: 20,
             cpaPhase: 'abstract',
           })
         ).toBe(false);
@@ -591,7 +635,7 @@ describe('Motor de Progressão - Integração Completa', () => {
         expect(
           canAdvanceOperation({
             operation: 'addition',
-            maxResult: 20,
+            maxResult: 999,
             cpaPhase: 'abstract',
           })
         ).toBe(true);
@@ -600,7 +644,7 @@ describe('Motor de Progressão - Integração Completa', () => {
       it('subtração também deve exigir maestria completa antes de próxima operação', () => {
         const level: MasteryLevel = {
           operation: 'subtraction',
-          maxResult: 20,
+          maxResult: 999,
           cpaPhase: 'abstract',
         };
 
