@@ -1,3 +1,87 @@
+# Dev Output — Sprint 5.2: Reescrever Segmentação Multi-Dígitos (CCL)
+
+**Data**: 2026-02-21
+**Task**: Substituir projeção horizontal por Connected Component Labeling + merge + split
+**Status**: ✅ Concluído — build OK (erro pré-existente em PetHub.tsx não relacionado)
+
+## Arquivo Reescrito
+
+### `src/utils/ocr/segment.ts` — Reescrito completo
+
+**Pipeline novo:**
+1. **Binarização** — mapa binário via luminância invertida (reusa `isStrokePixel` do 5.1)
+2. **Connected Component Labeling (CCL)** — flood-fill BFS com 4-connectivity
+3. **Filtro de ruído** — remove componentes minúsculos (<5% da área mediana), mas preserva "1" fino (aspect ratio > 3.0)
+4. **Merge de componentes próximos** — gap horizontal < 15% da largura média + overlap vertical → mesmo dígito (resolve "8" e "=" quebrados)
+5. **Split de componentes largos** — largura > 1.8x da mediana → procura vale de mínima densidade vertical no terço central → split se vale < 20% do máximo (resolve "10" grudado)
+6. **Ordenação L→R** — componentes ordenados por posição X
+7. **Fallback** — se CCL encontra 0 componentes, usa projeção horizontal legada
+
+**Tratamento especial para "1":**
+- Não filtrado como ruído se aspect ratio (altura/largura) > 3.0 e altura > 20% do canvas
+- `minDigitWidth` reduzido para 3px no fallback
+
+**Funções novas:**
+- `toBinaryMap()` — converte ImageData para Uint8Array binário
+- `connectedComponentLabeling()` — BFS flood-fill, retorna bounding boxes
+- `filterNoise()` — remove componentes minúsculos, preserva "1"
+- `mergeCloseComponents()` — junta partes do mesmo dígito
+- `splitWideComponents()` / `trySplitVertical()` — separa dígitos grudados
+- `recalcBounds()` — recalcula bounding box após split
+- `componentsToBoundingBoxes()` — converte para BoundingBox com padding
+- `fallbackProjectionBoxes()` — projeção horizontal como último recurso
+
+**`segmentDigitsDebug` atualizado:**
+- Retorna `method: 'ccl' | 'projection-fallback'` em vez de `projection` array
+- Retorna `boxes: BoundingBox[]` em vez de `ranges`
+
+## Impacto Esperado
+- "10", "12", "21", "100" reconhecidos corretamente na maioria dos casos
+- "1" fino não é mais filtrado como ruído
+- "8" e dígitos com gaps internos não são mais quebrados em partes
+
+---
+
+# Dev Output — Sprint 5.1: Fix Preprocessing OCR (Quick Wins)
+
+**Data**: 2026-02-21
+**Task**: Melhorar preprocessing do OCR para aumentar precisão (+15-25% esperado)
+**Status**: ✅ Concluído — build OK (erro pré-existente em PetHub.tsx não relacionado)
+
+## Arquivos Modificados
+
+### `src/utils/ocr/tensorOps.ts` — Reescrito
+**4 melhorias implementadas:**
+
+1. **Luminância em vez de canal alpha** — `normalize()` agora usa `(R+G+B)/3` invertido, composto com fundo branco. Robusto tanto para canvas transparente quanto fundo branco opaco.
+
+2. **Centro de massa** — `centerAndResize()` calcula centroide ponderado por intensidade e posiciona no centro do grid 28x28 (como o MNIST original foi preprocessado). Nova função `centerOfMass()`.
+
+3. **Binarização com threshold** — Nova função `binarize()` (threshold=0.3). Remove artefatos de antialiasing que confundem o modelo.
+
+4. **Normalização de espessura de traço** — Nova função `normalizeStrokeWidth()` com erosão/dilatação morfológica. Traços grossos (>15% pixels) são afinados, traços finos (<5%) são engrossados. Alvo: ~8-12% dos pixels (como MNIST). Funções auxiliares `dilate()` e `erode()` usando maxPool.
+
+**Pipeline atualizado em `prepareForModel()`:**
+```
+canvas → luminância invertida → binarização → centro de massa + resize 28x28 → normalizar espessura → batch dim
+```
+
+### `src/utils/ocr/segment.ts` — Modificado
+- `horizontalProjection()` e detecção de bounds verticais agora usam luminância invertida em vez de canal alpha
+- Nova função local `isStrokePixel()` com composição alpha + luminância
+
+### `src/utils/ocr/imageProcessing.ts` — Modificado
+- `findBoundingBox()` agora usa luminância invertida em vez de canal alpha
+- Nova função local `isStrokePixel()` com composição alpha + luminância
+
+## Impacto Esperado
+- +15-25% precisão em dígitos isolados
+- Mais robusto a variações de canvas (fundo branco vs transparente)
+- Menos falsos negativos de antialiasing
+- Traços de dedo grosso e stylus fino tratados igualmente
+
+---
+
 # Dev Output — Sprint 5.2: Estado de Sede (separado da Fome)
 
 **Data**: 2026-02-21

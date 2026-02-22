@@ -28,16 +28,37 @@ export function extractImageData(canvas: HTMLCanvasElement): ImageData {
 }
 
 /**
+ * Detecta se um pixel é traço usando luminância + alpha
+ *
+ * Compõe com fundo branco e inverte: traço escuro → valor alto, fundo claro → 0.
+ * Robusto para fundo transparente e fundo branco opaco.
+ */
+function isStrokePixel(data: Uint8ClampedArray, index: number, threshold: number): boolean {
+  const r = data[index];
+  const g = data[index + 1];
+  const b = data[index + 2];
+  const a = data[index + 3];
+
+  const alphaNorm = a / 255;
+  const luminance = (r + g + b) / 3;
+  const composited = luminance * alphaNorm + 255 * (1 - alphaNorm);
+  const inverted = 255 - composited;
+  return inverted >= threshold;
+}
+
+/**
  * Calcula bounding box da área com tinta no canvas
  *
+ * Usa luminância invertida para detectar traços (robusto a fundo branco/transparente).
+ *
  * @param imageData - Dados de pixels do canvas
- * @param alphaThreshold - Valor mínimo de alpha para considerar pixel como "traço" (0-255)
+ * @param intensityThreshold - Valor mínimo de intensidade invertida para considerar traço (0-255)
  * @param padding - Margem em pixels ao redor do traço
  * @returns Coordenadas do retângulo delimitador ou null se canvas vazio
  */
 export function findBoundingBox(
   imageData: ImageData,
-  alphaThreshold: number = 50,
+  intensityThreshold: number = 50,
   padding: number = 10
 ): BoundingBox | null {
   const { width, height, data } = imageData;
@@ -48,13 +69,12 @@ export function findBoundingBox(
   let maxY = 0;
   let hasPixels = false;
 
-  // Varre todos os pixels procurando traços (alpha > threshold)
+  // Varre todos os pixels procurando traços via luminância invertida
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const index = (y * width + x) * 4;
-      const alpha = data[index + 3];
 
-      if (alpha >= alphaThreshold) {
+      if (isStrokePixel(data, index, intensityThreshold)) {
         hasPixels = true;
         minX = Math.min(minX, x);
         minY = Math.min(minY, y);

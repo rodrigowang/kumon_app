@@ -231,7 +231,322 @@ streak.lastLessonDate = today
 
 ---
 
-## Sprint 5 — Progressão Multi-Dígitos + Mecânicas do Pet ← PRÓXIMA
+## Sprint 5 — OCR: Precisão e Robustez ← PRÓXIMA
+
+> O OCR é a parte mais frágil do app. Dígitos isolados erram frequentemente, multi-dígitos são piores ainda, e "10" é confundido com "0". Esta sprint foca em melhorias incrementais de alto impacto.
+
+---
+
+### Diagnóstico
+
+**Problemas confirmados:**
+1. **Modelo MNIST** treinado com dígitos perfeitos, centralizados — escrita infantil em touch é muito diferente
+2. **Segmentação por projeção horizontal** — "1" é fino demais, gap de 8px não separa "1" de "0"
+3. **Preprocessing** usa canal alpha (frágil), centering por bounding box (deveria ser centro de massa)
+4. **Confiança** — threshold de 80% gera muitos retries frustrantes com modelo fraco
+
+---
+
+### 5.1 — Fix Preprocessing (Quick Wins)
+
+**Problema:** o pipeline atual pega o canal alpha e faz centering pelo bounding box. MNIST espera dígito branco em fundo preto, centrado pelo centro de massa.
+
+**Arquivo:** `src/utils/ocr/tensorOps.ts`
+
+**Mudanças:**
+
+1. **Inverter cores** — canvas tem traço preto em fundo branco/transparente. MNIST quer branco-em-preto.
+   ```ts
+   // Atual: usa alpha direto (0=fundo, 255=traço) ← ok se alpha
+   // Problema: se canvas tem fundo branco opaco, alpha é 255 em tudo
+   // Fix: usar luminância (R+G+B)/3, inverter: (255 - lum) / 255
+   ```
+
+2. **Centro de massa** em vez de centro geométrico do bounding box
+   ```ts
+   // Calcular centroid (média ponderada de posições por intensidade)
+   // Posicionar centroid no centro do grid 28x28
+   // Isso é como o MNIST original foi preprocessado
+   ```
+
+3. **Binarização com threshold** — pixels intermediários (antialiasing) geram ruído
+   ```ts
+   // Aplicar threshold: pixel > 0.3 ? 1.0 : 0.0
+   // Remove artefatos de antialiasing que confundem o modelo
+   ```
+
+4. **Stroke width normalization** — traços grossos de dedo vs finos de stylus
+   ```ts
+   // Erosion/dilation morfológica para normalizar espessura
+   // Alvo: ~2-3px no espaço 28x28 (como MNIST)
+   ```
+
+**Impacto esperado:** +15-25% de precisão em dígitos isolados.
+
+> **Critério de done:** mesmos dígitos escritos que antes erravam agora são reconhecidos. Testar com 0-9 escritos à mão 5x cada.
+
+---
+
+### 5.2 — Reescrever Segmentação Multi-Dígitos
+
+**Problema:** projeção horizontal falha com "1" fino, dígitos encostados, e gaps internos (ex: "8").
+
+**Arquivo:** `src/utils/ocr/segment.ts`
+
+**Mudanças:**
+
+1. **Connected Component Labeling (CCL)** em vez de projeção horizontal
+   ```ts
+   // Binarizar a imagem
+   // Flood-fill para encontrar componentes conectados
+   // Cada componente = candidato a dígito
+   // Ordenar por posição X (esquerda→direita)
+   ```
+
+2. **Merge de componentes próximos** — "=" em "8" ou ":" em divisão
+   ```ts
+   // Se gap horizontal entre 2 componentes < 15% da largura média → merge
+   // Isso junta partes de dígitos que se quebraram
+   ```
+
+3. **Split de componentes largos** — "10" grudado vira 1 componente
+   ```ts
+   // Se largura > 1.8x da mediana → tentar split vertical
+   // Encontrar o "vale" de mínima densidade vertical
+   // Se vale < 20% da densidade máxima → split
+   ```
+
+4. **Tratamento especial para "1"**
+   ```ts
+   // "1" é estreito (~5-10px) e alto
+   // Se aspect ratio (altura/largura) > 3.0 → provavelmente é "1"
+   // Não filtrar como ruído (minDigitWidth atual = 5px pode cortar "1")
+   ```
+
+5. **Fallback inteligente** — se CCL encontra 0 componentes, tentar projeção horizontal como fallback
+
+**Impacto esperado:** "10" passa a ser reconhecido corretamente na maioria dos casos.
+
+> **Critério de done:** escrever "10", "12", "21", "100" — todos reconhecidos corretamente 4/5 vezes.
+
+---
+
+### 5.3 — Modelo OCR Melhorado (plano: A + B + C)
+
+**Problema:** modelo MNIST atual tem arquitetura básica (2 conv layers, treinado em 12 epochs com dados limpos). Não generaliza para escrita infantil.
+
+**Decisão:** implementar A (quantizar) + B (TTA) + C (modelo EMNIST). Não temos dados próprios para treinar — usamos datasets públicos e modelos prontos.
+
+---
+
+#### Modelo atual (baseline)
+
+| Propriedade | Valor |
+|-------------|-------|
+| Origem | Keras 2.2.4 (2018), exemplo padrão SciSharp/Keras.NET |
+| Arquitetura | Conv2D(32) → Conv2D(64) → MaxPool → Dense(128) → Dense(10) |
+| Dataset de treino | MNIST puro (60k amostras, dígitos limpos centralizados) |
+| Sem BatchNorm, sem data augmentation | ✗ |
+| Precisão MNIST test set | ~99.1% |
+| Precisão escrita infantil touch (estimada) | ~70-80% |
+| Tamanho | **4.6 MB** (float32, gargalo: Dense [9216, 128] = 4.5MB) |
+
+#### Resultado esperado após A+B+C
+
+| Propriedade | Valor |
+|-------------|-------|
+| Precisão touch (estimada) | **~83-90%** (+13-18%) |
+| Tamanho | **~2.5 MB** (46% menor) |
+| Latência | ~60ms/dígito (vs ~15ms hoje — imperceptível) |
+| Dados próprios necessários | **Nenhum** |
+
+---
+
+#### 5.3.1 — Test-Time Augmentation (TTA) em TypeScript ← PRIMEIRO
+
+**O que é:** para cada dígito segmentado, gerar 4 variações geométricas, predizer todas, fazer média das probabilidades softmax. A predição final é mais robusta porque compensa variações de ângulo e tamanho na escrita.
+
+**Por que primeiro:** puro TypeScript, sem dependência de Python. Funciona com qualquer modelo (atual ou novo). Se C falhar (modelo incompatível), B já melhora o que tem.
+
+**Criar:** `src/utils/ocr/tta.ts`
+
+```ts
+// Variações geradas por dígito:
+//   1. Original (sem mudança)
+//   2. Rotação -5° (criança escreveu levemente torto para a esquerda)
+//   3. Rotação +5° (levemente torto para a direita)
+//   4. Scale 0.9x (dígito um pouco menor, mais centralizado)
+//
+// Para cada variação:
+//   - Aplicar transformação com tf.image.transform()
+//   - model.predict() → softmax [1, 10]
+//
+// Resultado: média das 4 softmax → argMax → dígito + confiança
+//
+// IMPORTANTE: NÃO fazer flip horizontal/vertical (6 vira 9!)
+```
+
+**Modificar:** `src/utils/ocr/predict.ts`
+
+```ts
+// Antes:  model.predict(tensor) → dígito
+// Depois: predictWithTTA(model, tensor) → dígito (usa média de 4 variações)
+//
+// Flag para desabilitar TTA em debug/testes:
+//   predictDigit(model, tensor, { useTTA: true })
+```
+
+**Detalhes de implementação:**
+
+1. `rotateImage(tensor4D, degrees)` — usa `tf.image.transform()` com matriz de rotação 2D
+2. `scaleImage(tensor4D, factor)` — usa `tf.image.transform()` com matriz de escala
+3. `predictWithTTA(model, tensor4D)` — gera variações, prediz, média, retorna `DigitPrediction`
+4. Todas as variações dentro de `tf.tidy()` para evitar memory leaks
+5. Se TTA desabilitado, comportamento idêntico ao atual (sem overhead)
+
+**Impacto:** +3-5% precisão touch. Latência ~60ms/dígito (4x predict). Zero mudança no modelo.
+
+> **Critério de done:** `predictWithTTA` funciona. Dígitos ambíguos (1 vs 7, 6 vs 0) melhoram taxa de acerto. Build sem erros TS.
+
+---
+
+#### 5.3.2 — Modelo EMNIST (substituir modelo) ← SEGUNDO
+
+**O que é:** baixar modelo CNN pré-treinado em EMNIST-Digits (280k amostras, 4.7x mais que MNIST, escrita mais variada). Converter de `.h5` para TFJS. Drop-in replacement.
+
+**Fonte:** [j05t/emnist](https://github.com/j05t/emnist) — 99.84% no EMNIST-Digits test set.
+
+**Por que EMNIST > MNIST:** MNIST tem dígitos limpos de adultos com caneta em papel. EMNIST tem 280k amostras com mais variação natural. Nenhum dos dois tem escrita infantil em touch, mas EMNIST generaliza melhor.
+
+**Passo a passo:**
+
+1. **Verificar compatibilidade** — clonar repo, inspecionar o `.h5`:
+   ```bash
+   git clone https://github.com/j05t/emnist.git /tmp/emnist
+   # Verificar: input shape é [28, 28, 1]? Output é [10]? Formato Keras compatível?
+   ```
+
+2. **Converter para TFJS** (1 comando):
+   ```bash
+   pip install tensorflowjs tensorflow
+   tensorflowjs_converter \
+     --input_format keras \
+     --output_format tfjs_layers_model \
+     --quantize_float16 \
+     /tmp/emnist/export_json_h5/model.h5 \
+     public/models/mnist/
+   ```
+   Nota: `--quantize_float16` já faz a quantização (passo A) junto. Dois em um.
+
+3. **Validar** — carregar o app, testar 0-9 escritos à mão.
+
+4. **Fallback** — se o modelo EMNIST for incompatível (input shape diferente, erro na conversão, precisão pior na prática):
+   - Manter o modelo atual
+   - Quantizar o modelo atual com float16 (passo A isolado):
+     ```bash
+     tensorflowjs_converter \
+       --input_format tfjs_layers_model \
+       --output_format tfjs_layers_model \
+       --quantize_float16 \
+       public/models/mnist/model.json \
+       /tmp/mnist-q16/
+     # Se OK, mover de volta para public/models/mnist/
+     ```
+
+**Mudança de código:** nenhuma se input shape = [28, 28, 1] (esperado). Se diferente, ajustar `prepareForModel()` em `tensorOps.ts`.
+
+**Impacto:** +10-15% precisão touch. Tamanho ~2.5MB (com quantização float16 embutida).
+
+> **Critério de done:** modelo EMNIST carregando no app. Dígitos 0-9 escritos à mão 5x cada, taxa de acerto visivelmente melhor que o modelo antigo.
+
+---
+
+#### 5.3.3 — Calibrar thresholds de confiança ← TERCEIRO
+
+**O que é:** ajustar os thresholds de aceitação/confirmação/retry ao novo modelo + TTA. O modelo EMNIST pode ter distribuição de confiança diferente do MNIST.
+
+**Arquivo:** `src/utils/ocr/predict.ts` (onde estão os thresholds)
+
+**Passo a passo:**
+
+1. Testar 0-9 (5x cada) com o novo modelo + TTA
+2. Anotar a confiança média por dígito
+3. Ajustar thresholds:
+
+| Faixa | Ação | Atual | Novo (estimar após teste) |
+|-------|------|-------|--------------------------|
+| Alta confiança | Auto-aceitar | ≥ 80% | ≥ 70% (se modelo mais calibrado) |
+| Média confiança | Pedir confirmação | 50-79% | 40-69% |
+| Baixa confiança | Pedir redesenho | < 50% | < 40% |
+
+4. Se a confiança média do novo modelo for mais alta, pode relaxar thresholds → menos "redesenhe" → menos frustração.
+
+**Impacto:** reduz retries frustantes sem aumentar erros silenciosos.
+
+> **Critério de done:** thresholds recalibrados. Criança não é forçada a redesenhar quando o modelo já acertou.
+
+---
+
+#### Opções descartadas (referência)
+
+| Opção | Por que não agora |
+|-------|-------------------|
+| **D) Treinar custom** | Não temos dados de escrita infantil. EMNIST público é suficiente por agora. Reconsiderar se C não for satisfatório. |
+| **E) CRNN+CTC** | Overengineering. CCL (5.2) + modelo melhor (C) + TTA (B) devem resolver. Reconsiderar para v2. |
+| **Fine-tune com dados da criança** | Precisaria de feature de coleta de dados + semanas de uso real. Anotar no backlog como Sprint futura. |
+
+---
+
+### 5.4 — UX: Guias Visuais e Feedback de OCR
+
+**Problema:** criança não sabe onde/como escrever para o OCR funcionar melhor. Sem feedback do que o OCR "viu".
+
+**Arquivos:** `DrawingCanvas.tsx`, `AbstractExerciseScreen.tsx`
+
+**Mudanças:**
+
+1. **Guias visuais no canvas** — linhas pontilhadas separando áreas de dígitos
+   ```tsx
+   // Se resposta esperada tem N dígitos, mostrar N "caixas" pontilhadas
+   // Ex: resposta "12" → 2 caixas lado a lado
+   // Apenas guia visual, não obriga — segmentação ainda funciona livre
+   ```
+
+2. **Preview do OCR** — mostrar o que o modelo "viu" antes de submeter
+   ```tsx
+   // Após segmentação, mostrar thumbnails 28x28 dos dígitos detectados
+   // Criança vê: "Eu vi: [1] [2]" com as imagens processadas
+   // Se errado, pode redesenhar antes de confirmar
+   ```
+
+3. **Dica de espaçamento** — quando segmentação falha
+   ```tsx
+   // Se OCR retorna 1 dígito mas resposta esperada tem 2+:
+   //   "Tente escrever os números mais separados!"
+   ```
+
+**Impacto esperado:** menos frustração, criança aprende a escrever de forma que o OCR entende.
+
+> **Critério de done:** canvas tem guias para multi-dígito. Dica aparece quando segmentação falha.
+
+---
+
+### Ordem de Implementação (Sprint 5)
+
+```
+5.1 Fix Preprocessing (quick wins)           ✅ COMPLETA
+5.2 Reescrever Segmentação (CCL)             ✅ COMPLETA
+5.3.1 TTA em TypeScript                      ← PRÓXIMO (~1h, puro TS, sem Python)
+5.3.2 Modelo EMNIST + quantização            ← DEPOIS (30min, precisa Python p/ conversão)
+5.3.3 Calibrar thresholds de confiança       ← DEPOIS (30min, testar + ajustar)
+5.4 UX: Guias e Feedback                     ← POR ÚLTIMO (React/UI)
+```
+
+**Nota:** 5.3.1 é independente de 5.3.2 — TTA funciona com qualquer modelo. Se 5.3.2 falhar (modelo incompatível), 5.3.1 sozinho já melhora.
+
+---
+
+## Sprint 6 — Progressão Multi-Dígitos + Mecânicas do Pet (antigo Sprint 5)
 
 > Dois objetivos paralelos: ampliar o alcance matemático para operações com 2 e 3 dígitos, e tornar o cuidado do pet mais rico com o estado de sede independente da fome.
 
