@@ -505,6 +505,8 @@ export default function AbstractExerciseScreen({
 
   const operatorSymbol = currentProblem.operation === 'addition' ? '+' : '\u2212';
   const isProcessing = ocrState.phase === 'processing';
+  // Número de dígitos esperados na resposta (para guias visuais e dicas)
+  const expectedDigitCount = currentProblem.correctAnswer.toString().length;
 
   return (
     <Box
@@ -633,6 +635,7 @@ export default function AbstractExerciseScreen({
             onRetry={handleOCRRetry}
             retryCount={ocrRetryCount}
             onUseKeypad={handleOpenKeypad}
+            expectedDigits={expectedDigitCount}
           />
         </Box>
       )}
@@ -851,6 +854,7 @@ export default function AbstractExerciseScreen({
                   width="100%"
                   height={200}
                   onDrawingChange={handleDrawingChange}
+                  expectedDigits={expectedDigitCount}
                 />
               </Box>
 

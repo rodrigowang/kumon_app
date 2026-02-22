@@ -8,6 +8,8 @@ interface OCRRetryOverlayProps {
   retryCount?: number;
   /** Chamado quando o usuário quer usar o teclado numérico */
   onUseKeypad?: () => void;
+  /** Número de dígitos esperados na resposta (ativa dica de espaçamento) */
+  expectedDigits?: number;
 }
 
 /**
@@ -21,12 +23,15 @@ export const OCRRetryOverlay: React.FC<OCRRetryOverlayProps> = ({
   playSound,
   retryCount = 0,
   onUseKeypad,
+  expectedDigits,
 }) => {
   useEffect(() => {
     playSound?.('oops');
   }, [playSound]);
 
   const showKeypadButton = retryCount >= 2 && onUseKeypad;
+  // Dica de espaçamento: só no primeiro retry, quando a resposta tem 2+ dígitos
+  const showSpacingTip = !showKeypadButton && expectedDigits !== undefined && expectedDigits > 1;
 
   // Suporte a teclado: Enter = retry, K = teclado
   useEffect(() => {
@@ -109,7 +114,7 @@ export const OCRRetryOverlay: React.FC<OCRRetryOverlayProps> = ({
           fw={600}
           c="white"
           style={{
-            marginBottom: '32px',
+            marginBottom: showSpacingTip ? '12px' : '32px',
             lineHeight: 1.3,
             textShadow: '0 2px 8px rgba(0,0,0,0.3)',
           }}
@@ -118,6 +123,26 @@ export const OCRRetryOverlay: React.FC<OCRRetryOverlayProps> = ({
             ? 'Não consegui entender.\nQuer usar o teclado?'
             : 'Não consegui entender.\nVamos tentar de novo?'}
         </Text>
+
+        {/* Dica de espaçamento para multi-dígitos */}
+        {showSpacingTip && (
+          <Box
+            style={{
+              backgroundColor: 'rgba(255, 255, 255, 0.15)',
+              borderRadius: '12px',
+              padding: '12px 20px',
+              marginBottom: '24px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+            }}
+          >
+            <Text size="28px" style={{ lineHeight: 1 }}>💡</Text>
+            <Text size="22px" c="white" fw={500} style={{ lineHeight: 1.3 }}>
+              Escreva os números mais separados!
+            </Text>
+          </Box>
+        )}
 
         {/* Botões */}
         <Stack gap="md" align="center">

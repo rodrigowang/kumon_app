@@ -536,10 +536,10 @@ streak.lastLessonDate = today
 ```
 5.1 Fix Preprocessing (quick wins)           ✅ COMPLETA
 5.2 Reescrever Segmentação (CCL)             ✅ COMPLETA
-5.3.1 TTA em TypeScript                      ← PRÓXIMO (~1h, puro TS, sem Python)
-5.3.2 Modelo EMNIST + quantização            ← DEPOIS (30min, precisa Python p/ conversão)
-5.3.3 Calibrar thresholds de confiança       ← DEPOIS (30min, testar + ajustar)
-5.4 UX: Guias e Feedback                     ← POR ÚLTIMO (React/UI)
+5.3.1 TTA em TypeScript                      ✅ COMPLETA
+5.3.2 Modelo EMNIST + quantização            ✅ COMPLETA (quantização float16 aplicada, 4.6MB→2.3MB)
+5.3.3 Calibrar thresholds de confiança       ← pendente (precisa testes manuais)
+5.4 UX: Guias e Feedback                     ✅ COMPLETA (guias pontilhadas + dica espaçamento)
 ```
 
 **Nota:** 5.3.1 é independente de 5.3.2 — TTA funciona com qualquer modelo. Se 5.3.2 falhar (modelo incompatível), 5.3.1 sozinho já melhora.

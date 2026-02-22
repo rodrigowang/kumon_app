@@ -6,6 +6,7 @@
  */
 
 import * as tf from '@tensorflow/tfjs';
+import { predictWithTTA } from './tta';
 
 /**
  * Resultado de predição de um dígito
@@ -78,9 +79,22 @@ function predictSingleDigit(
  * tensors.forEach(t => t.dispose());
  * ```
  */
+/**
+ * Opções para controle do pipeline de predição
+ */
+export interface PredictOptions {
+  /**
+   * Habilita Test-Time Augmentation (4 variações geométricas + média softmax).
+   * Melhora precisão em ~3-5% mas aumenta latência ~4x.
+   * Padrão: true
+   */
+  useTTA?: boolean;
+}
+
 export function predictDigits(
   model: tf.LayersModel,
-  tensors: tf.Tensor4D[]
+  tensors: tf.Tensor4D[],
+  options?: PredictOptions
 ): DigitPrediction[] {
   // Valida entrada
   if (!model) {
@@ -91,13 +105,17 @@ export function predictDigits(
     return [];
   }
 
+  const useTTA = options?.useTTA !== false; // default true
+
   // Prediz cada tensor individualmente
   // Cada predição é isolada em tf.tidy() para gerenciamento de memória
   const predictions: DigitPrediction[] = [];
 
   for (let i = 0; i < tensors.length; i++) {
     try {
-      const prediction = predictSingleDigit(model, tensors[i]);
+      const prediction = useTTA
+        ? predictWithTTA(model, tensors[i])
+        : predictSingleDigit(model, tensors[i]);
       predictions.push(prediction);
     } catch (err) {
       console.error(`[predictDigits] Erro ao predizer dígito ${i}:`, err);
@@ -121,7 +139,8 @@ export function predictDigits(
  */
 export async function predictDigitsAsync(
   model: tf.LayersModel,
-  tensors: tf.Tensor4D[]
+  tensors: tf.Tensor4D[],
+  options?: PredictOptions
 ): Promise<DigitPrediction[]> {
   if (!model) {
     throw new Error('[predictDigitsAsync] Modelo não fornecido');
@@ -131,20 +150,20 @@ export async function predictDigitsAsync(
     return [];
   }
 
+  const useTTA = options?.useTTA !== false; // default true
   const predictions: DigitPrediction[] = [];
 
   for (let i = 0; i < tensors.length; i++) {
     try {
-      // predictSingleDigit já usa tf.tidy() internamente
-      const prediction = predictSingleDigit(model, tensors[i]);
+      // TTA ou predição simples — ambas usam tf.tidy() internamente
+      const prediction = useTTA
+        ? predictWithTTA(model, tensors[i])
+        : predictSingleDigit(model, tensors[i]);
 
       predictions.push(prediction);
 
-      // Yield para o event loop a cada 3 predições
-      // Permite que a UI se atualize
-      if (i % 3 === 0) {
-        await tf.nextFrame();
-      }
+      // Yield para o event loop a cada predição (TTA é ~4x mais pesado)
+      await tf.nextFrame();
     } catch (err) {
       console.error(`[predictDigitsAsync] Erro ao predizer dígito ${i}:`, err);
       predictions.push({ digit: -1, confidence: 0 });
@@ -259,6 +278,8 @@ export async function predictNumber(
   options?: {
     /** Função de segmentação customizada */
     segmentFn?: (canvas: HTMLCanvasElement) => tf.Tensor4D[];
+    /** Opções de predição (TTA etc.) */
+    predictOptions?: PredictOptions;
   }
 ): Promise<NumberPredictionResult | null> {
   // Lazy import para evitar dependência circular
@@ -274,8 +295,8 @@ export async function predictNumber(
   }
 
   try {
-    // 2. Executa predição em cada dígito
-    const predictions = await predictDigitsAsync(model, tensors);
+    // 2. Executa predição em cada dígito (TTA habilitado por padrão)
+    const predictions = await predictDigitsAsync(model, tensors, options?.predictOptions);
 
     // 3. Valida se temos predições válidas
     if (predictions.length === 0 || predictions.every(p => p.digit < 0)) {

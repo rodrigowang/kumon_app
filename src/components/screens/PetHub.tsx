@@ -242,8 +242,9 @@ export default function PetHub({ onPlay, onViewProgress, onDevDashboard }: PetHu
         <Box
           aria-live="polite"
           aria-label={
-            displayStatus === 'eating' ? 'Bichinho comendo' :
-            `Bichinho: ${getPetStatusLabel(displayStatus === 'eating' ? 'happy' : displayStatus)}`
+            displayStatus === 'eating'
+              ? 'Bichinho comendo'
+              : `Bichinho: ${getPetStatusLabel(displayStatus)}`
           }
           style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}
         >

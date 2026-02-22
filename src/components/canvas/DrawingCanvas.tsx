@@ -15,6 +15,8 @@ interface DrawingCanvasProps {
   onDrawStart?: () => void;
   onDrawEnd?: () => void;
   onDrawingChange?: (hasContent: boolean) => void;
+  /** Número de dígitos esperados na resposta. Quando > 1, exibe guias pontilhadas. */
+  expectedDigits?: number;
 }
 
 interface Point {
@@ -26,7 +28,7 @@ interface Point {
 type Stroke = Point[];
 
 const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
-  ({ width = '100%', height = 300, onDrawStart, onDrawEnd, onDrawingChange }, ref) => {
+  ({ width = '100%', height = 300, onDrawStart, onDrawEnd, onDrawingChange, expectedDigits }, ref) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
@@ -221,6 +223,38 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, DrawingCanvasProps>(
           overflow: 'hidden',
         }}
       >
+        {/* Guias pontilhadas para multi-dígitos */}
+        {expectedDigits && expectedDigits > 1 && (
+          <Box
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              display: 'flex',
+              pointerEvents: 'none',
+              zIndex: 2,
+              borderRadius: '12px',
+              overflow: 'hidden',
+            }}
+          >
+            {Array.from({ length: expectedDigits }, (_, i) => (
+              <Box
+                key={i}
+                style={{
+                  flex: 1,
+                  height: '100%',
+                  borderRight: i < expectedDigits - 1
+                    ? '2px dashed rgba(74, 144, 226, 0.35)'
+                    : 'none',
+                }}
+              />
+            ))}
+          </Box>
+        )}
+
         {/* Label "Escreva aqui" */}
         {strokes.length === 0 && currentStroke.length === 0 && (
           <Box

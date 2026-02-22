@@ -29,7 +29,7 @@ export {
 } from './segment';
 
 // Motor de predição
-export type { DigitPrediction, PredictionStatus, NumberPredictionResult } from './predict';
+export type { DigitPrediction, PredictionStatus, NumberPredictionResult, PredictOptions } from './predict';
 export {
   predictDigits,
   predictDigitsAsync,
@@ -40,3 +40,6 @@ export {
   calculateAverageConfidence,
   calculateWeightedConfidence,
 } from './predict';
+
+// Test-Time Augmentation
+export { predictWithTTA } from './tta';

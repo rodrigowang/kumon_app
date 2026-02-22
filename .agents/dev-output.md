@@ -1,3 +1,92 @@
+# Dev Output — Sprint 5.4: Guias Visuais no Canvas + Dica de Espaçamento
+
+**Data**: 2026-02-22
+**Task**: Guias pontilhadas no canvas para multi-dígitos + dica "Escreva mais separado!" no retry
+**Status**: ✅ Concluído — 0 erros TypeScript, build limpo
+
+## Arquivos Modificados
+
+### `src/components/canvas/DrawingCanvas.tsx`
+- Novo prop `expectedDigits?: number`
+- Quando `> 1`: overlay absoluto com N caixas divididas por linhas pontilhadas azuis (rgba(74,144,226,0.35))
+- `pointer-events: none` — não afeta o desenho nem o OCR
+- Aparece para qualquer resposta com 2+ dígitos (ex: 10, 12, 21...)
+
+### `src/components/ui/OCRRetryOverlay.simple.tsx`
+- Novo prop `expectedDigits?: number`
+- `showSpacingTip`: true quando `expectedDigits > 1` E não está no modo "usar teclado"
+- Mostra box destacada: "💡 Escreva os números mais separados!" no 1º e 2º retry
+
+### `src/components/exercises/AbstractExerciseScreen.tsx`
+- `expectedDigitCount = currentProblem.correctAnswer.toString().length`
+- Passado para `<DrawingCanvas expectedDigits={expectedDigitCount} />`
+- Passado para `<OCRRetryOverlay expectedDigits={expectedDigitCount} />`
+
+---
+
+# Dev Output — Sprint 5.3.2: Quantização float16 do modelo MNIST
+
+**Data**: 2026-02-22
+**Task**: Quantizar modelo MNIST com float16 para reduzir tamanho e latência
+**Status**: ✅ Concluído — modelo 4.6MB → 2.3MB (50% menor), build limpo
+
+## Decisão técnica
+
+O modelo EMNIST (j05t/emnist, 258epochs_model_7.h5, Keras 2.1.6) foi descartado:
+- Usa `channels_first` [None, 1, 28, 28] — incompatível com nosso pipeline [1, 28, 28, 1]
+- `Lambda` layers não suportadas pelo TFJS converter → `modelTopology: null` no output
+- Keras 2.1.6 é antigo demais para converter com tensorflowjs 4.22.0
+
+## Fallback executado: quantização do modelo MNIST atual
+
+### `public/models/mnist/model.json` — SUBSTITUÍDO
+- Antes: 2 shards (`group1-shard1of2.bin` + `group1-shard2of2.bin`)
+- Depois: 1 shard (`group1-shard1of1.bin`)
+- Formato: `layers-model`, quantização `float16` em todos os pesos
+- Input shape mantido: `[None, 28, 28, 1]` ← 100% compatível com pipeline existente
+- Zero mudanças de código (o hook `useOCRModel.ts` carrega via `model.json` sem hardcode dos shards)
+
+### `public/models/mnist/group1-shard1of1.bin` — NOVO (substituiu 2 shards)
+- 2.3 MB (vs 4.6 MB original — 50% menor)
+- Todos os pesos: `quantization: {dtype: 'float16', original_dtype: 'float32'}`
+
+### `public/models/mnist-backup/` — CRIADO (backup)
+- Contém os 3 arquivos originais para rollback se necessário
+
+---
+
+# Dev Output — Sprint 5.3.1: Test-Time Augmentation (TTA)
+
+**Data**: 2026-02-22
+**Task**: Implementar TTA — 4 variações geométricas + média softmax para maior precisão OCR
+**Status**: ✅ Concluído — 0 erros TypeScript, build limpo
+
+## Arquivos Criados
+
+### `src/utils/ocr/tta.ts` — NOVO
+- `buildRotationMatrix(degrees)` — matriz afim para rotação em torno do centro 28x28
+- `buildScaleMatrix(factor)` — matriz afim para escala uniforme em torno do centro
+- `applyAffineTransform(tensor4D, matrix)` — aplica transform via `tf.image.transform()`
+- `predictWithTTA(model, tensor)` — gera 4 variantes (original, -5°, +5°, 0.9x), média softmax
+
+## Arquivos Modificados
+
+### `src/utils/ocr/predict.ts`
+- Import de `predictWithTTA` do novo módulo `./tta`
+- Interface `PredictOptions { useTTA?: boolean }` adicionada (exportada)
+- `predictDigits()` aceita `options?: PredictOptions` — usa TTA por default
+- `predictDigitsAsync()` aceita `options?: PredictOptions` — yield por dígito (TTA é 4x mais pesado)
+- `predictNumber()` aceita `options.predictOptions?: PredictOptions` — passa para `predictDigitsAsync`
+
+### `src/utils/ocr/index.ts`
+- Exporta `PredictOptions` (tipo)
+- Exporta `predictWithTTA` (função)
+
+### `src/components/screens/PetHub.tsx`
+- Fix: comparação redundante `displayStatus === 'eating'` removida do template literal (erro TS pré-existente de narrowing de control flow)
+
+---
+
 # Dev Output — Sprint 5.2: Reescrever Segmentação Multi-Dígitos (CCL)
 
 **Data**: 2026-02-21
