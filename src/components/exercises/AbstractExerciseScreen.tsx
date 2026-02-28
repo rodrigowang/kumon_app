@@ -23,6 +23,7 @@ import { LevelChangeNotification } from '../ui/LevelChangeNotification';
 import { generateProblem } from '../../lib/math';
 import { HesitationTimer } from '../../lib/progression';
 import { predictNumber } from '../../utils/ocr/predict';
+import { validateCanvas } from '../../utils/ocr/canvasValidation';
 import { useSound } from '../../hooks';
 import { useGameStore, SESSION_SIZE } from '../../stores/useGameStore';
 import type { Problem, ExerciseResult, MasteryLevel } from '../../types';
@@ -42,7 +43,7 @@ type OCRState =
   | { phase: 'idle' }
   | { phase: 'processing' }
   | { phase: 'confirmation'; recognizedNumber: number; confidence: number }
-  | { phase: 'retry' }
+  | { phase: 'retry'; customMessage?: string }
   | { phase: 'keypad' };
 
 /**
@@ -373,11 +374,24 @@ export default function AbstractExerciseScreen({
       return;
     }
 
+    // Validação rápida do canvas antes de gastar processamento com OCR
+    const validation = validateCanvas(canvasElement);
+    if (!validation.valid) {
+      console.log(`[OCR Validation] Rejeitado: ${validation.reason} — "${validation.message}"`);
+      setOcrState({ phase: 'retry', customMessage: validation.message });
+      // Restaurar timer para a criança tentar de novo
+      timerRef.current.start();
+      pendingHesitationRef.current = null;
+      return;
+    }
+
     try {
       // OCR com timeout de 5 segundos
       const OCR_TIMEOUT_MS = 5000;
       const result = await Promise.race([
-        predictNumber(canvasElement, ocrModel),
+        predictNumber(canvasElement, ocrModel, {
+          expectedAnswer: currentProblem.correctAnswer,
+        }),
         new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), OCR_TIMEOUT_MS)),
       ]);
 
@@ -636,6 +650,7 @@ export default function AbstractExerciseScreen({
             retryCount={ocrRetryCount}
             onUseKeypad={handleOpenKeypad}
             expectedDigits={expectedDigitCount}
+            customMessage={ocrState.phase === 'retry' ? ocrState.customMessage : undefined}
           />
         </Box>
       )}

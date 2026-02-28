@@ -2,7 +2,7 @@
 
 **Objetivo**: Loop completo de estudo diário: criança faz contas → ganha moedas → cuida do bichinho virtual → quer voltar amanhã.
 
-**Estado atual (2026-02-20)**: ✅ **Sprints 1–3 + Sprint 2 (Bichinho Virtual) COMPLETAS**. App funcional com PetHub (tela principal), sessões de 10 exercícios, resumo com moedas, estrelas, progressão automática, OCR, PWA offline, fallback teclado e loop completo do pet virtual. Audit de bugs concluído: **0 erros TypeScript, build limpo**. `ProgressDashboard.tsx`, `LevelBadge.tsx`, `LevelChangeNotification.tsx` e `levelFormat.ts` existem como arquivos não commitados e ficam em standby (substituídos pelo PetHub como tela de progresso visual).
+**Estado atual (2026-02-28)**: ✅ **Sprints 1–5 COMPLETAS**. App funcional com PetHub, sessões de 10 exercícios, OCR com TTA + CCL + preprocessing melhorado + quantização float16, subtração, PWA offline, fallback teclado e loop completo do pet virtual. **0 erros TypeScript, build limpo**. Próximo: Sprint 6 (OCR inteligente — context-aware + confusion pairs + rejeição rabisco).
 
 ---
 
@@ -546,13 +546,143 @@ streak.lastLessonDate = today
 
 ---
 
-## Sprint 6 — Progressão Multi-Dígitos + Mecânicas do Pet (antigo Sprint 5)
+## Sprint 6 — OCR Inteligente (Context-Aware + Heurísticas)
+
+> O modelo MNIST com TTA e preprocessing já está bom para dígitos isolados. Agora o ganho vem de usar **inteligência no código** — o app sabe a resposta certa e pode usar isso para desempatar, e confusões previsíveis podem ser tratadas com heurísticas.
+
+---
+
+### 6.1 — Context-Aware Prediction (top-K + resposta esperada) ✅ COMPLETA
+
+**Problema:** O app sabe a resposta correta, mas o OCR ignora esse contexto. Se o modelo dá 60% para "7" e 30% para "1", e a resposta correta é "1", o app rejeita — quando deveria pedir confirmação.
+
+**Arquivo:** `src/utils/ocr/predict.ts`
+
+**Regras (sem "colar"):**
+1. Se top-1 **é** a resposta correta e confiança ≥ 80% → `accepted` (sem mudança)
+2. Se top-1 **não é** a resposta correta, mas a resposta correta está no **top-3** → baixar threshold de confirmação:
+   - Confiança da resposta correta ≥ 20% → `confirmation` (em vez de `retry`)
+   - Mostrar a resposta correta no overlay de confirmação (não o top-1 errado)
+3. Se top-1 **é** a resposta correta mas confiança está entre 50-79% → `confirmation` (sem mudança)
+4. **Nunca** auto-aceitar resposta errada. O context-aware só **relaxa** o retry, não aceita automaticamente.
+
+**Implementação:**
+```ts
+// Em predictNumber(), após obter predictions:
+// 1. Montar número a partir de top-1 de cada dígito
+// 2. Se número != expectedAnswer:
+//    2a. Para cada posição de dígito, verificar se expectedAnswer[i] está no top-3
+//    2b. Se sim, calcular confiança alternativa usando probabilidades do expectedAnswer
+//    2c. Se confiança alternativa >= 20%, retornar status='confirmation' com o expectedAnswer
+// 3. Se número == expectedAnswer: lógica normal de thresholds
+
+interface PredictNumberOptions {
+  expectedAnswer?: number;  // novo campo opcional
+  useTTA?: boolean;
+}
+```
+
+**Importante:** `expectedAnswer` é **opcional**. Se não fornecido, comportamento idêntico ao atual. Isso mantém a função pura para testes.
+
+**Impacto:** Reduz retries frustrantes em ~30-40% dos casos onde o modelo quase acertou.
+
+> **Critério de done:** Escrever "7" quando resposta é "1" → overlay pergunta "Você escreveu 1?" em vez de "Não entendi, redesenhe". Build sem erros TS.
+
+---
+
+### 6.2 — Confusion-Pair Heuristics ✅ COMPLETA
+
+**Problema:** Crianças confundem sistematicamente certos dígitos. O modelo também. Podemos usar heurísticas geométricas para desempatar.
+
+**Criar:** `src/utils/ocr/confusionPairs.ts`
+
+**Pares de confusão previsíveis:**
+| Par | Heurística de desempate |
+|-----|------------------------|
+| 1↔7 | "7" tem traço horizontal no topo. Analisar densidade de pixels na faixa superior (top 30%) |
+| 6↔0 | "6" tem extensão abaixo da metade. Analisar se há pixels na metade inferior-esquerda fora do "corpo" circular |
+| 4↔9 | "4" tem abertura no topo-direito. Analisar quadrante superior-direito |
+| 5↔3 | "5" tem traço horizontal no topo. Similar a 1↔7 |
+
+**Implementação:**
+```ts
+interface ConfusionResolution {
+  originalDigit: number;
+  alternativeDigit: number;
+  confidence: number;  // confiança ajustada
+}
+
+// Para cada dígito predito:
+// 1. Verificar se top-1 e top-2 formam um par de confusão conhecido
+// 2. Se sim, E a diferença de confiança é < 15%, aplicar heurística geométrica
+// 3. Heurística retorna qual dos dois é mais provável
+// 4. Ajustar confidence com base na heurística
+
+function resolveConfusion(
+  tensor: tf.Tensor4D,
+  topPredictions: DigitPrediction[],
+): ConfusionResolution | null;
+```
+
+**Integração:** Chamar `resolveConfusion()` após `predictWithTTA()` em `predict.ts`, antes de montar o número final.
+
+**Impacto:** +5-10% em dígitos que caem nos pares de confusão.
+
+> **Critério de done:** "1" escrito com traço horizontal no topo → reconhecido como "7" (não "1"). "6" com rabo → não confundido com "0". Build sem erros TS.
+
+---
+
+### 6.3 — Rejeição de Rabisco/Canvas Vazio ✅ COMPLETA
+
+**Problema:** Criança pode submeter canvas vazio, rabisco aleatório, ou preenchimento total. O OCR gasta processamento e retorna lixo.
+
+**Criar:** `src/utils/ocr/canvasValidation.ts`
+
+**Regras de validação (antes de rodar OCR):**
+```ts
+interface CanvasValidationResult {
+  valid: boolean;
+  reason?: 'empty' | 'too_sparse' | 'too_dense' | 'too_small';
+  message?: string;  // mensagem amigável para a criança
+}
+
+function validateCanvas(canvas: HTMLCanvasElement): CanvasValidationResult;
+```
+
+| Condição | Threshold | Mensagem |
+|----------|-----------|----------|
+| Canvas vazio | < 0.5% pixels preenchidos | "Escreva um número! ✏️" |
+| Muito pouco | 0.5% - 1.5% pixels | "Escreva um pouco maior! 📏" |
+| Rabisco/preenchimento | > 40% pixels preenchidos | "Ops! Tente escrever só o número 🔢" |
+| Traço muito pequeno | Bounding box < 15% do canvas | "Escreva um pouco maior! 📏" |
+
+**Integração:** Chamar `validateCanvas()` no handler de submit (antes de `predictNumber()`). Se inválido, mostrar mensagem com som "doubt" e não processar OCR.
+
+**Impacto:** Evita processamento desnecessário + feedback instantâneo + menos frustração.
+
+> **Critério de done:** Submit com canvas vazio → mensagem amigável sem chamar OCR. Rabisco cobrindo tudo → mensagem amigável. Build sem erros TS.
+
+---
+
+### Ordem de Implementação (Sprint 6 OCR)
+
+```
+6.1 Context-Aware Prediction    ✅ COMPLETA
+6.2 Confusion-Pair Heuristics   ✅ COMPLETA
+6.3 Rejeição Rabisco/Vazio      ✅ COMPLETA
+```
+
+**Após completar:** Avaliar resultados práticos antes de decidir próximos passos (skeletonization, adaptive binarization, ensemble, coleta de dados).
+
+---
+
+## Sprint 7 — Progressão Multi-Dígitos + Mecânicas do Pet (antigo Sprint 5)
 
 > Dois objetivos paralelos: ampliar o alcance matemático para operações com 2 e 3 dígitos, e tornar o cuidado do pet mais rico com o estado de sede independente da fome.
 
 ---
 
-### 5.1 — Progressão Multi-Dígitos (2+1 e 3+1 dígitos)
+### 7.1 — Progressão Multi-Dígitos (2+1 e 3+1 dígitos)
 
 **Motivação:** hoje soma e subtração evoluem apenas dentro de resultados até 20 (1 dígito + 1 dígito). Queremos continuar a progressão natural para operações com dezenas e centenas.
 
@@ -625,7 +755,7 @@ Mesma lógica para subtração (ex: 73-6, 452-8).
 
 ---
 
-### 5.2 — Estado de Sede (separado da Fome)
+### 7.2 — Estado de Sede (separado da Fome)
 
 **Motivação:** água e comida hoje são intercambiáveis para `hungry`. Com sede como estado independente, cada item tem propósito único — mais engajamento e razão para comprar ambos.
 
@@ -740,4 +870,4 @@ Sprint 4 (polimento):
 
 ---
 
-**Última atualização**: 2026-02-21 (Sprint 5 especificada: multi-dígitos 5.1 + sede 5.2)
+**Última atualização**: 2026-02-28 (Sprint 6 OCR inteligente especificada: context-aware 6.1 + confusion pairs 6.2 + rejeição rabisco 6.3)

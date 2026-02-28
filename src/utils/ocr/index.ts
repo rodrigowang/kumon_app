@@ -42,4 +42,13 @@ export {
 } from './predict';
 
 // Test-Time Augmentation
+export type { TTAPrediction } from './tta';
 export { predictWithTTA } from './tta';
+
+// Confusion-Pair Heuristics
+export type { ConfusionResolution } from './confusionPairs';
+export { resolveConfusion } from './confusionPairs';
+
+// Canvas Validation
+export type { CanvasValidationResult, CanvasRejectionReason } from './canvasValidation';
+export { validateCanvas } from './canvasValidation';

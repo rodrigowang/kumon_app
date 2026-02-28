@@ -10,6 +10,8 @@ interface OCRRetryOverlayProps {
   onUseKeypad?: () => void;
   /** Número de dígitos esperados na resposta (ativa dica de espaçamento) */
   expectedDigits?: number;
+  /** Mensagem customizada (ex: validação de canvas). Substitui a mensagem padrão. */
+  customMessage?: string;
 }
 
 /**
@@ -24,6 +26,7 @@ export const OCRRetryOverlay: React.FC<OCRRetryOverlayProps> = ({
   retryCount = 0,
   onUseKeypad,
   expectedDigits,
+  customMessage,
 }) => {
   useEffect(() => {
     playSound?.('oops');
@@ -119,9 +122,11 @@ export const OCRRetryOverlay: React.FC<OCRRetryOverlayProps> = ({
             textShadow: '0 2px 8px rgba(0,0,0,0.3)',
           }}
         >
-          {showKeypadButton
-            ? 'Não consegui entender.\nQuer usar o teclado?'
-            : 'Não consegui entender.\nVamos tentar de novo?'}
+          {customMessage
+            ? customMessage
+            : showKeypadButton
+              ? 'Não consegui entender.\nQuer usar o teclado?'
+              : 'Não consegui entender.\nVamos tentar de novo?'}
         </Text>
 
         {/* Dica de espaçamento para multi-dígitos */}

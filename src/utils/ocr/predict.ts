@@ -7,6 +7,8 @@
 
 import * as tf from '@tensorflow/tfjs';
 import { predictWithTTA } from './tta';
+import type { TTAPrediction } from './tta';
+import { resolveConfusion } from './confusionPairs';
 
 /**
  * Resultado de predição de um dígito
@@ -16,6 +18,8 @@ export interface DigitPrediction {
   digit: number;
   /** Confiança da predição (0-1) */
   confidence: number;
+  /** Top-K candidatos (disponível quando TTA habilitado) */
+  topK?: DigitPrediction[];
 }
 
 /**
@@ -113,10 +117,12 @@ export function predictDigits(
 
   for (let i = 0; i < tensors.length; i++) {
     try {
-      const prediction = useTTA
-        ? predictWithTTA(model, tensors[i])
-        : predictSingleDigit(model, tensors[i]);
-      predictions.push(prediction);
+      if (useTTA) {
+        const ttaResult: TTAPrediction = predictWithTTA(model, tensors[i]);
+        predictions.push(applyConfusionResolution(ttaResult, tensors[i]));
+      } else {
+        predictions.push(predictSingleDigit(model, tensors[i]));
+      }
     } catch (err) {
       console.error(`[predictDigits] Erro ao predizer dígito ${i}:`, err);
       // Retorna predição com confiança zero em caso de erro
@@ -125,6 +131,39 @@ export function predictDigits(
   }
 
   return predictions;
+}
+
+/**
+ * Aplica resolução de confusão a uma predição TTA
+ *
+ * Se top-1 e top-2 formam um par de confusão conhecido (1↔7, 6↔0, 4↔9, 5↔3)
+ * e a diferença de confiança é < 15%, usa heurísticas geométricas para desempatar.
+ */
+function applyConfusionResolution(
+  ttaResult: TTAPrediction,
+  tensor: tf.Tensor4D,
+): DigitPrediction {
+  const resolution = resolveConfusion(tensor, ttaResult.topK);
+
+  if (resolution) {
+    if (resolution.swapped) {
+      console.log(
+        `[OCR Confusion] ${ttaResult.digit}→${resolution.resolvedDigit} ` +
+        `(confiança ${ttaResult.confidence.toFixed(2)}→${resolution.resolvedConfidence.toFixed(2)})`
+      );
+    }
+    return {
+      digit: resolution.resolvedDigit,
+      confidence: resolution.resolvedConfidence,
+      topK: ttaResult.topK,
+    };
+  }
+
+  return {
+    digit: ttaResult.digit,
+    confidence: ttaResult.confidence,
+    topK: ttaResult.topK,
+  };
 }
 
 /**
@@ -156,11 +195,12 @@ export async function predictDigitsAsync(
   for (let i = 0; i < tensors.length; i++) {
     try {
       // TTA ou predição simples — ambas usam tf.tidy() internamente
-      const prediction = useTTA
-        ? predictWithTTA(model, tensors[i])
-        : predictSingleDigit(model, tensors[i]);
-
-      predictions.push(prediction);
+      if (useTTA) {
+        const ttaResult: TTAPrediction = predictWithTTA(model, tensors[i]);
+        predictions.push(applyConfusionResolution(ttaResult, tensors[i]));
+      } else {
+        predictions.push(predictSingleDigit(model, tensors[i]));
+      }
 
       // Yield para o event loop a cada predição (TTA é ~4x mais pesado)
       await tf.nextFrame();
@@ -280,6 +320,13 @@ export async function predictNumber(
     segmentFn?: (canvas: HTMLCanvasElement) => tf.Tensor4D[];
     /** Opções de predição (TTA etc.) */
     predictOptions?: PredictOptions;
+    /**
+     * Resposta esperada (opcional). Usada para context-aware prediction:
+     * - Nunca auto-aceita resposta errada
+     * - Se a resposta correta está no top-3 de cada dígito, relaxa retry → confirmation
+     * - Permite que a criança confirme em vez de redesenhar
+     */
+    expectedAnswer?: number;
   }
 ): Promise<NumberPredictionResult | null> {
   // Lazy import para evitar dependência circular
@@ -325,6 +372,21 @@ export async function predictNumber(
       status = 'retry';
     }
 
+    // 7. Context-aware: se temos expectedAnswer e o status seria 'retry',
+    //    verificar se a resposta correta aparece no top-3 de cada dígito
+    const expectedAnswer = options?.expectedAnswer;
+    if (expectedAnswer !== undefined && status === 'retry') {
+      const contextResult = tryContextAwarePrediction(predictions, expectedAnswer);
+      if (contextResult) {
+        console.log(
+          `[OCR Context-Aware] Relaxando retry→confirmation: ` +
+          `top-1 era ${number}, resposta esperada ${expectedAnswer} ` +
+          `encontrada no top-3 com confiança ${contextResult.confidence.toFixed(2)}`
+        );
+        return contextResult;
+      }
+    }
+
     return {
       number,
       status,
@@ -335,6 +397,76 @@ export async function predictNumber(
     // Libera memória dos tensors
     tensors.forEach(t => t.dispose());
   }
+}
+
+/**
+ * Tenta usar context-aware prediction para relaxar retry → confirmation
+ *
+ * Verifica se a resposta esperada aparece no top-3 de cada dígito.
+ * Se sim, e a confiança mínima do caminho alternativo >= 20%,
+ * retorna resultado com status 'confirmation' usando a resposta esperada.
+ *
+ * Regras de segurança:
+ * - Nunca auto-aceita (sempre 'confirmation', nunca 'accepted')
+ * - Nunca inventa dígitos que não estão no top-3
+ * - Se o número de dígitos segmentados != número de dígitos esperados, desiste
+ *
+ * @returns NumberPredictionResult se a resposta esperada foi encontrada, null caso contrário
+ */
+function tryContextAwarePrediction(
+  predictions: DigitPrediction[],
+  expectedAnswer: number,
+): NumberPredictionResult | null {
+  const expectedStr = expectedAnswer.toString();
+
+  // Se o número de dígitos segmentados não bate, não temos como desempatar
+  if (predictions.length !== expectedStr.length) {
+    return null;
+  }
+
+  // Verificar se cada dígito esperado aparece no top-3 do dígito correspondente
+  const alternativeDigits: DigitPrediction[] = [];
+
+  for (let i = 0; i < predictions.length; i++) {
+    const expectedDigit = parseInt(expectedStr[i], 10);
+    const topK = predictions[i].topK;
+
+    // Sem top-K disponível (TTA desabilitado) — não podemos verificar
+    if (!topK || topK.length === 0) {
+      return null;
+    }
+
+    // Procurar o dígito esperado no top-K
+    const match = topK.find(k => k.digit === expectedDigit);
+
+    if (!match) {
+      // Dígito esperado não está no top-3 — desiste
+      return null;
+    }
+
+    // Confiança mínima de 20% para considerar o caminho alternativo
+    if (match.confidence < 0.2) {
+      return null;
+    }
+
+    alternativeDigits.push({
+      digit: expectedDigit,
+      confidence: match.confidence,
+      topK: topK,
+    });
+  }
+
+  // Todas as posições têm o dígito esperado no top-3 com confiança >= 20%
+  const alternativeConfidence = Math.min(
+    ...alternativeDigits.map(d => d.confidence)
+  );
+
+  return {
+    number: expectedAnswer,
+    status: 'confirmation', // Sempre pedir confirmação, nunca auto-aceitar
+    confidence: alternativeConfidence,
+    digits: alternativeDigits,
+  };
 }
 
 /**

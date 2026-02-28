@@ -112,10 +112,18 @@ function applyAffineTransform(tensor4D: tf.Tensor4D, matrix: number[]): tf.Tenso
  * @param tensor - Tensor de entrada [1, 28, 28, 1]
  * @returns Predição com dígito e confiança baseada na média TTA
  */
+/**
+ * Resultado estendido de TTA com probabilidades top-K
+ */
+export interface TTAPrediction extends DigitPrediction {
+  /** Top-K candidatos ordenados por probabilidade (inclui top-1) */
+  topK: DigitPrediction[];
+}
+
 export function predictWithTTA(
   model: tf.LayersModel,
   tensor: tf.Tensor4D
-): DigitPrediction {
+): TTAPrediction {
   // Gera variantes augmentadas fora do tidy (precisam sobreviver até a inferência)
   const rotNeg5 = applyAffineTransform(tensor, buildRotationMatrix(-5));
   const rotPos5 = applyAffineTransform(tensor, buildRotationMatrix(5));
@@ -123,7 +131,11 @@ export function predictWithTTA(
 
   try {
     // Executa predições e faz média das distribuições softmax
-    const result = tf.tidy(() => {
+    // NOTA: tf.tidy() não aceita retorno de objetos custom (DigitPrediction[])
+    // Extraímos os dados numéricos dentro do tidy e montamos o resultado fora
+    let allProbabilities: number[];
+
+    tf.tidy(() => {
       const variants: tf.Tensor4D[] = [tensor, rotNeg5, rotPos5, scaled09];
 
       // Coleta [10] de probabilidades de cada variante
@@ -136,14 +148,21 @@ export function predictWithTTA(
       const stacked = tf.stack(allProbs); // [4, 10]
       const averaged = stacked.mean(0) as tf.Tensor1D; // [10]
 
-      // Extrai dígito e confiança via dataSync (bloqueante mas necessário aqui)
-      const digit = averaged.argMax().dataSync()[0];
-      const confidence = averaged.max().dataSync()[0];
-
-      return { digit, confidence };
+      // Extrai dados numéricos via dataSync (bloqueante mas necessário)
+      allProbabilities = Array.from(averaged.dataSync());
     });
 
-    return result;
+    // Monta resultado fora do tidy (objetos JS puros, sem tensors)
+    const topK: DigitPrediction[] = allProbabilities!
+      .map((prob, idx) => ({ digit: idx, confidence: prob }))
+      .sort((a, b) => b.confidence - a.confidence)
+      .slice(0, 3);
+
+    return {
+      digit: topK[0].digit,
+      confidence: topK[0].confidence,
+      topK,
+    };
   } finally {
     // Descarta apenas as variantes criadas aqui — tensor original é do chamador
     rotNeg5.dispose();
