@@ -15,6 +15,7 @@ import { useOCRModel } from './hooks'
 import { useGameStore } from './stores/useGameStore'
 
 import type { SessionSummary } from './stores/useGameStore'
+import type { GameMode } from './types'
 
 type AppView = 'home' | 'exercise' | 'dev-dashboard' | 'session-summary' | 'progress-dashboard'
 
@@ -82,8 +83,8 @@ function App() {
   }
 
   // Handler: iniciar sessão de exercícios
-  const handlePlay = () => {
-    startSession()
+  const handlePlay = (mode: GameMode) => {
+    startSession(mode)
     setCurrentView('exercise')
   }
 
@@ -94,7 +95,7 @@ function App() {
     setCurrentView('session-summary')
   }
 
-  // Handler: jogar de novo
+  // Handler: jogar de novo (usa último modo selecionado)
   const handlePlayAgain = () => {
     startSession()
     setCurrentView('exercise')

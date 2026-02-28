@@ -20,6 +20,11 @@ import {
   CPA_PROGRESSION,
 } from '../../types/mastery';
 
+/** Resolve 'mixed' → 'addition' para compatibilidade com o sistema legado de progressão */
+function resolveOperation(op: Operation | 'mixed'): Operation {
+  return op === 'mixed' ? 'addition' : op;
+}
+
 /**
  * Buffer circular para armazenar últimos N resultados
  */
@@ -332,12 +337,13 @@ export class MasteryTracker {
    * Se já estiver no último micro-nível, avança para a próxima operação.
    */
   private advanceMicrolevel(): MasteryLevel | null {
-    const progression = MICROLEVEL_PROGRESSION[this.currentLevel.operation];
+    const op = resolveOperation(this.currentLevel.operation);
+    const progression = MICROLEVEL_PROGRESSION[op];
     const currentIndex = progression.indexOf(this.currentLevel.maxResult as never);
 
     if (currentIndex === -1 || currentIndex >= progression.length - 1) {
       // Último micro-nível — tentar avançar para próxima operação
-      const nextOp = getNextOperation(this.currentLevel.operation);
+      const nextOp = getNextOperation(op);
       if (nextOp) {
         const nextProgression = MICROLEVEL_PROGRESSION[nextOp];
         return {
@@ -360,7 +366,7 @@ export class MasteryTracker {
    * Regride micro-nível (diminui maxResult)
    */
   private regressMicrolevel(): MasteryLevel | null {
-    const progression = MICROLEVEL_PROGRESSION[this.currentLevel.operation];
+    const progression = MICROLEVEL_PROGRESSION[resolveOperation(this.currentLevel.operation)];
     const currentIndex = progression.indexOf(this.currentLevel.maxResult as never);
 
     if (currentIndex === -1 || currentIndex === 0) {
@@ -410,7 +416,7 @@ export class MasteryTracker {
    * Retorna ao nível baseline (mais básico da operação atual)
    */
   private getBaselineLevel(): MasteryLevel {
-    const progression = MICROLEVEL_PROGRESSION[this.currentLevel.operation];
+    const progression = MICROLEVEL_PROGRESSION[resolveOperation(this.currentLevel.operation)];
 
     return {
       operation: this.currentLevel.operation,
@@ -479,7 +485,7 @@ export function createMasteryTracker(
  * Critério: Maestria completa = abstract no último micro-nível
  */
 export function canAdvanceOperation(currentLevel: MasteryLevel): boolean {
-  const progression = MICROLEVEL_PROGRESSION[currentLevel.operation];
+  const progression = MICROLEVEL_PROGRESSION[resolveOperation(currentLevel.operation)];
   const isLastMicrolevel = currentLevel.maxResult === progression[progression.length - 1];
   const isAbstract = currentLevel.cpaPhase === 'abstract';
 

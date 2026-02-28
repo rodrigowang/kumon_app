@@ -12,7 +12,9 @@ import type { MasteryLevel } from '../types';
  * // => "Somas até 10"
  */
 export function formatLevelName(level: MasteryLevel): string {
-  const operationName = level.operation === 'addition' ? 'Somas' : 'Subtrações';
+  const operationName =
+    level.operation === 'mixed' ? 'Soma e Subtração' :
+    level.operation === 'addition' ? 'Somas' : 'Subtrações';
   return `${operationName} até ${level.maxResult}`;
 }
 

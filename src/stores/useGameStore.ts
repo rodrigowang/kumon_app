@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { MasteryTracker } from '../lib/progression';
 import { calculateSessionCoins } from '../lib/coinCalculator';
-import type { MasteryLevel, ExerciseResult } from '../types';
+import type { MasteryLevel, ExerciseResult, GameMode } from '../types';
+import { DEFAULT_GAME_MODE, DIFFICULTY_MAX_RESULT } from '../types';
 
 // Tipos
 export type CPAPhase = 'concrete' | 'pictorial' | 'abstract';
@@ -62,9 +62,11 @@ export interface GameState {
   ocrFeedbackData: OCRFeedbackData | null;
   ocrFailedAttempts: number;
 
-  // Maestria e progressão
+  // Nível atual (derivado do GameMode selecionado)
   currentLevel: MasteryLevel;
-  masteryTracker: MasteryTracker;
+
+  // Modo selecionado pela criança (persistido)
+  selectedMode: GameMode;
 
   // Estatísticas globais (acumuladas)
   sessionStats: {
@@ -84,9 +86,9 @@ export interface GameState {
   // Progresso geral
   totalStars: number;
 
-  /** true após a primeira vez que o player desbloqueia subtração — controla banner do PetHub */
+  /** @deprecated Mantido para compatibilidade com localStorage existente */
   subtractionBannerSeen: boolean;
-  /** true após a primeira vez que o player desbloqueia multi-dígitos (maxResult=99) — controla banner do PetHub */
+  /** @deprecated Mantido para compatibilidade com localStorage existente */
   multiDigitBannerSeen: boolean;
 }
 
@@ -100,31 +102,41 @@ interface GameActions {
   // Ações de progressão
   submitExercise: (result: ExerciseResult) => void;
   resetProgress: () => void;
-  /** Marca o banner de desbloqueio de subtração como visto */
+  /** @deprecated Mantido para compatibilidade */
   dismissSubtractionBanner: () => void;
-  /** Marca o banner de desbloqueio de multi-dígitos como visto */
+  /** @deprecated Mantido para compatibilidade */
   dismissMultiDigitBanner: () => void;
 
   // Ações de sessão (rodada de 10 exercícios)
-  startSession: () => void;
+  startSession: (mode?: GameMode) => void;
   /** Retorna true se a sessão acabou (10 exercícios) */
   isSessionComplete: () => boolean;
   endSession: () => SessionSummary;
+
+  /** Atualiza o modo selecionado pela criança */
+  setSelectedMode: (mode: GameMode) => void;
 }
 
-// Nível inicial (Small Steps — primeiro passo)
-const INITIAL_LEVEL: MasteryLevel = {
-  operation: 'addition',
-  maxResult: 5,
-  cpaPhase: 'abstract',
-};
+/**
+ * Converte GameMode → MasteryLevel para compatibilidade com generateProblem
+ */
+function gameModeToLevel(mode: GameMode): MasteryLevel {
+  return {
+    operation: mode.operation,
+    maxResult: DIFFICULTY_MAX_RESULT[mode.difficulty],
+    cpaPhase: 'abstract',
+  };
+}
+
+// Nível inicial derivado do GameMode padrão
+const INITIAL_LEVEL: MasteryLevel = gameModeToLevel(DEFAULT_GAME_MODE);
 
 // Store com persistência
 export const useGameStore = create<GameState & GameActions>()(
   persist(
     (set, get) => ({
   currentExercise: null,
-  cpaPhase: 'concrete',
+  cpaPhase: 'concrete' as CPAPhase,
   level: 1,
   sessionData: null,
   ocrStatus: {
@@ -132,13 +144,13 @@ export const useGameStore = create<GameState & GameActions>()(
     isLoading: true,
     error: null,
   },
-  ocrFeedbackState: 'idle',
+  ocrFeedbackState: 'idle' as OCRFeedbackState,
   ocrFeedbackData: null,
   ocrFailedAttempts: 0,
 
   // Estado de progressão
   currentLevel: INITIAL_LEVEL,
-  masteryTracker: new MasteryTracker(INITIAL_LEVEL),
+  selectedMode: DEFAULT_GAME_MODE,
   sessionStats: {
     totalExercises: 0,
     correct: 0,
@@ -180,17 +192,17 @@ export const useGameStore = create<GameState & GameActions>()(
     set((state) => ({ ocrFailedAttempts: state.ocrFailedAttempts + 1 })),
   resetOCRFailedAttempts: () => set({ ocrFailedAttempts: 0 }),
 
-  // Action principal: submeter exercício e atualizar progressão
+  // Atualiza o modo selecionado e o currentLevel derivado
+  setSelectedMode: (mode: GameMode) => {
+    set({
+      selectedMode: mode,
+      currentLevel: gameModeToLevel(mode),
+    });
+  },
+
+  // Action principal: submeter exercício e atualizar estatísticas
+  // Sem progressão automática — nível é fixo conforme GameMode selecionado
   submitExercise: (result: ExerciseResult) => {
-    const { masteryTracker, currentLevel } = get();
-
-    // 1. Adicionar resultado ao tracker
-    masteryTracker.addResult(result);
-
-    // 2. Analisar progressão
-    const analysis = masteryTracker.analyze();
-
-    // 3. Atualizar estatísticas globais + sessão atual
     set((state) => ({
       sessionStats: {
         totalExercises: state.sessionStats.totalExercises + 1,
@@ -200,7 +212,7 @@ export const useGameStore = create<GameState & GameActions>()(
         slowCount: state.sessionStats.slowCount + (result.speed === 'slow' ? 1 : 0),
         hesitantCount: state.sessionStats.hesitantCount + (result.speed === 'hesitant' ? 1 : 0),
       },
-      lastProgressionDecision: analysis.decision,
+      lastProgressionDecision: 'maintain',
       // Atualizar sessão atual
       sessionRound: {
         ...state.sessionRound,
@@ -210,26 +222,14 @@ export const useGameStore = create<GameState & GameActions>()(
         fastCount: state.sessionRound.fastCount + (result.speed === 'fast' ? 1 : 0),
       },
     }));
-
-    // 4. Aplicar decisão de progressão
-    if (analysis.decision !== 'maintain' && analysis.newLevel) {
-      console.log('📈 Mudança de nível detectada:', {
-        decision: analysis.decision,
-        from: currentLevel,
-        to: analysis.newLevel,
-        reason: analysis.reason,
-      });
-
-      masteryTracker.updateLevel(analysis.newLevel);
-      set({ currentLevel: analysis.newLevel });
-
-      // TODO: Mostrar feedback visual na UI (toast/modal "Novo desafio!")
-    }
   },
 
-  // Iniciar nova sessão (rodada de 10 exercícios)
-  startSession: () => {
+  // Iniciar nova sessão com modo selecionado
+  startSession: (mode?: GameMode) => {
+    const gameMode = mode ?? get().selectedMode;
     set({
+      selectedMode: gameMode,
+      currentLevel: gameModeToLevel(gameMode),
       sessionRound: {
         isActive: true,
         exerciseIndex: 0,
@@ -310,10 +310,9 @@ export const useGameStore = create<GameState & GameActions>()(
 
   // Resetar progresso (para debug/testes)
   resetProgress: () => {
-    const newTracker = new MasteryTracker(INITIAL_LEVEL);
     set({
       currentLevel: INITIAL_LEVEL,
-      masteryTracker: newTracker,
+      selectedMode: DEFAULT_GAME_MODE,
       sessionStats: {
         totalExercises: 0,
         correct: 0,
@@ -341,9 +340,10 @@ export const useGameStore = create<GameState & GameActions>()(
     {
       name: 'kumon-game-storage',
       storage: createJSONStorage(() => localStorage),
-      // Salvar apenas campos serializáveis (MasteryTracker será reconstruído)
+      // Salvar apenas campos serializáveis
       partialize: (state) => ({
         currentLevel: state.currentLevel,
+        selectedMode: state.selectedMode,
         sessionStats: state.sessionStats,
         lastProgressionDecision: state.lastProgressionDecision,
         totalStars: state.totalStars,
@@ -351,7 +351,6 @@ export const useGameStore = create<GameState & GameActions>()(
         subtractionBannerSeen: state.subtractionBannerSeen,
         multiDigitBannerSeen: state.multiDigitBannerSeen,
       }),
-      // Reconstruir MasteryTracker após hidratação
       onRehydrateStorage: () => {
         return (state, error) => {
           if (error) {
@@ -360,10 +359,11 @@ export const useGameStore = create<GameState & GameActions>()(
           }
 
           if (state) {
-            // Reconstruir tracker com o nível salvo
-            const tracker = new MasteryTracker(state.currentLevel);
-            state.masteryTracker = tracker;
-            console.log('[useGameStore] Estado hidratado com sucesso. Nível:', state.currentLevel);
+            // Se temos selectedMode salvo, derivar currentLevel dele
+            if (state.selectedMode) {
+              state.currentLevel = gameModeToLevel(state.selectedMode);
+            }
+            console.log('[useGameStore] Estado hidratado. Modo:', state.selectedMode);
           }
         };
       },

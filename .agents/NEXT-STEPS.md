@@ -676,161 +676,227 @@ function validateCanvas(canvas: HTMLCanvasElement): CanvasValidationResult;
 
 ---
 
-## Sprint 7 — Progressão Multi-Dígitos + Mecânicas do Pet (antigo Sprint 5)
+## Sprint 7 — Seleção de Nível pela Criança
 
-> Dois objetivos paralelos: ampliar o alcance matemático para operações com 2 e 3 dígitos, e tornar o cuidado do pet mais rico com o estado de sede independente da fome.
-
----
-
-### 7.1 — Progressão Multi-Dígitos (2+1 e 3+1 dígitos)
-
-**Motivação:** hoje soma e subtração evoluem apenas dentro de resultados até 20 (1 dígito + 1 dígito). Queremos continuar a progressão natural para operações com dezenas e centenas.
-
-**Auditoria OCR concluída:** o pipeline já suporta 3 dígitos sem nenhuma mudança. `segmentDigits`, `predictDigits` e `predictionsToNumber` são agnósticos à quantidade de dígitos.
-
-**Nova tabela de níveis:**
-
-| Nível | maxResult | Tipo de operação | Exemplo | Moedas/acerto |
-|-------|-----------|-----------------|---------|---------------|
-| 1 | 5 | 1+1 dígitos | 2+3 | 1c |
-| 2 | 10 | 1+1 dígitos | 7+3 | 1c |
-| 3 | 15 | 1+1 dígitos | 8+7 | 3c |
-| 4 | 20 | 1+1 dígitos | 9+9 | 3c |
-| 5 | 99 | 2+1 dígitos | 45+8 | 8c |
-| 6 | 999 | 3+1 dígitos | 247+5 | 15c |
-
-Mesma lógica para subtração (ex: 73-6, 452-8).
-
-**Passo a passo de implementação:**
-
-**Passo 1 — `src/types/mastery.ts`**
-- Estender `MICROLEVEL_PROGRESSION`:
-  ```ts
-  addition:    [5, 10, 15, 20, 99, 999]
-  subtraction: [5, 10, 15, 20, 99, 999]
-  ```
-- Nenhuma outra mudança neste arquivo.
-
-**Passo 2 — `src/lib/math/generateProblem.ts`**
-- Adicionar 2 novos blocos em `getAdditionConfig()`:
-  ```
-  maxResult <= 99:  operandA 10–89, operandB 1–9  (2+1 dígitos)
-  maxResult <= 999: operandA 100–989, operandB 1–9 (3+1 dígitos)
-  ```
-- Adicionar 2 novos blocos em `getSubtractionConfig()`:
-  ```
-  maxResult <= 99:  minuend 11–99, subtrahend 1–9  (resultado ≥ 1)
-  maxResult <= 999: minuend 101–999, subtrahend 1–9 (resultado ≥ 1)
-  ```
-- Garantir que `isValidResult` e `isValidOperands` continuam funcionando (sem negativos).
-
-**Passo 3 — `src/lib/coinCalculator.ts`**
-- Atualizar `getCoinsPerCorrect()`:
-  ```ts
-  maxResult <= 10  → 1c
-  maxResult <= 20  → 3c
-  maxResult <= 99  → 8c   ← novo
-  maxResult <= 999 → 15c  ← novo
-  ```
-
-**Passo 4 — Verificar banner de desbloqueio (`PetHub.tsx`)**
-- Hoje existe banner "Agora vamos subtrair!" para transição adição→subtração.
-- Avaliar se vale adicionar banner "Números maiores!" ao desbloquear nível 5 (maxResult=99).
-- Decisão: sim, mesma mecânica do `subtractionBannerSeen`.
-
-**Passo 5 — Testes unitários**
-- Atualizar testes de `generateProblem` para cobrir os novos níveis.
-- Atualizar testes de `coinCalculator` para cobrir `maxResult=99` e `maxResult=999`.
-- Testar que `advanceMicrolevel()` progride corretamente de 20→99→999.
-
-**Arquivos modificados:**
-- `src/types/mastery.ts`
-- `src/lib/math/generateProblem.ts`
-- `src/lib/coinCalculator.ts`
-- `src/components/screens/PetHub.tsx` (banner opcional)
-- `tests/unit/coinCalculator.spec.ts`
-- `tests/unit/generateProblem.spec.ts` (se existir)
-
-> **Critério de done:** criança que completa soma/subtração nível 4 (maxResult=20, abstract) avança para exercícios tipo "45+8". Moedas sobem de 3c para 8c. Build sem erros TypeScript.
+> A progressão automática é lenta demais e subtração quase nunca aparece. A criança deve poder escolher diretamente o que quer praticar: operação e dificuldade. Isso dá autonomia e elimina frustração.
 
 ---
 
-### 7.2 — Estado de Sede (separado da Fome)
+### Problema atual
 
-**Motivação:** água e comida hoje são intercambiáveis para `hungry`. Com sede como estado independente, cada item tem propósito único — mais engajamento e razão para comprar ambos.
+1. **Progressão muito lenta**: precisa de 5 acertos rápidos consecutivos para subir de microlevel. A criança fica presa em somas fáceis (maxResult=5) por muitas sessões.
+2. **Subtração rara**: só aparece após completar TODA a progressão de adição até maxResult=20 no nível abstract. Na prática, quase nunca chega.
+3. **Sem escolha**: a criança não tem controle sobre o que pratica. Se ela já sabe somar até 10, não pode pular.
+4. **Multi-dígitos inacessíveis**: exercícios com resultado > 20 (ex: 45+8) nunca são alcançados na progressão atual.
 
-**Nota sobre timing:** pet começa com fome (`lastFedAt: 0`) mas com sede defasada (`lastWateredAt: Date.now() - 6 * 3600 * 1000`) para que os estados não apareçam sempre simultaneamente.
+### Solução: Tela de Seleção de Nível
 
-**Novos estados derivados em runtime:**
-| Estado | Condição |
-|--------|----------|
-| `happy` | alimentado E hidratado (ambos < 12h) |
-| `hungry` | fome (12–24h sem comer), mas hidratado |
-| `thirsty` | sede (12–24h sem beber), mas alimentado |
-| `hungry_and_thirsty` | fome E sede simultaneamente |
-| `sick` | qualquer um dos dois > 24h sem atenção |
+Substituir a progressão automática por **seleção direta na PetHub**. A criança escolhe 2 coisas:
 
-**Regras de item:**
-| Item | Cura |
-|------|------|
-| 💧 Água | `thirsty` e `hungry_and_thirsty` (atualiza `lastWateredAt`) |
-| 🍎 Comida | `hungry` e `hungry_and_thirsty` (atualiza `lastFedAt`) |
-| 💊 Remédio | `sick` (restaura ambos `lastFedAt` e `lastWateredAt`) |
+**1. Operação:**
+| Opção | Label visual | O que gera |
+|-------|-------------|------------|
+| Soma | `+` | Só adição |
+| Soma e Subtração | `+ -` | Mix aleatório de adição e subtração |
 
-**Passo a passo de implementação:**
+**2. Dificuldade (por número de dígitos no resultado):**
+| Opção | Label visual | maxResult | Exemplos |
+|-------|-------------|-----------|----------|
+| 1 dígito | `1-9` | 9 | 3+5, 8-2 |
+| 2 dígitos | `10-99` | 99 | 45+8, 73-6 |
+| 3 dígitos | `100-999` | 999 | 247+5, 503-8 |
 
-**Passo 1 — `src/lib/petActions.ts`**
-- Adicionar `PetStatus`: `'thirsty' | 'hungry_and_thirsty'` aos tipos existentes.
-- Alterar assinatura de `derivePetStatus(lastFedAt, lastWateredAt)`.
-- Lógica:
-  ```ts
-  const hungry = elapsed(lastFedAt) > 12h
-  const thirsty = elapsed(lastWateredAt) > 12h
-  const fedSick = elapsed(lastFedAt) > 24h
-  const waterSick = elapsed(lastWateredAt) > 24h
-  if (fedSick || waterSick) return 'sick'
-  if (hungry && thirsty) return 'hungry_and_thirsty'
-  if (hungry) return 'hungry'
-  if (thirsty) return 'thirsty'
-  return 'happy'
-  ```
-- Atualizar `canFeedPet()`: água só funciona se status inclui sede; comida só se inclui fome.
-- Atualizar `getPetStatusLabel()` com os novos estados.
+Total: **6 combinações possíveis** (2 operações × 3 dificuldades).
 
-**Passo 2 — `src/stores/usePetStore.ts`**
-- Adicionar campo `lastWateredAt: number` ao estado.
-- Estado inicial: `lastWateredAt: Date.now() - 6 * 3600 * 1000` (defasado 6h).
-- Atualizar `feedPet('water')` → atualiza `lastWateredAt`.
-- Atualizar `feedPet('food')` → atualiza `lastFedAt` (sem mudança, já faz isso).
-- Atualizar `feedPet('medicine')` → atualiza ambos.
-- Atualizar `completedLesson()` → emergency rescue verifica `lastWateredAt` também.
-- Atualizar `getPetStatus()` → passa ambos os timestamps.
-- Adicionar `lastWateredAt` ao `partialize` (persistir).
+**Moedas por dificuldade:**
+| Dificuldade | Moedas/acerto |
+|-------------|---------------|
+| 1 dígito | 2c |
+| 2 dígitos | 5c |
+| 3 dígitos | 10c |
 
-**Passo 3 — `src/components/screens/PetHub.tsx`**
-- Botão "Usar Água" habilitado se status é `thirsty` ou `hungry_and_thirsty`.
-- Botão "Usar Comida" habilitado se status é `hungry` ou `hungry_and_thirsty`.
-- Label de status exibe os novos estados.
-
-**Passo 4 — `src/components/ui/PetDisplay.tsx`**
-- Sprite `hungry_and_thirsty` → reusar sprite `hungry` (ou criar variação CSS).
-
-**Passo 5 — Testes unitários**
-- Atualizar testes de `petActions` para cobrir os 5 estados.
-- Testar `canFeedPet` para todas as combinações (água em `thirsty`, `hungry`, `sick`, `happy`).
-
-**Arquivos modificados:**
-- `src/lib/petActions.ts`
-- `src/stores/usePetStore.ts`
-- `src/components/screens/PetHub.tsx`
-- `src/components/ui/PetDisplay.tsx`
-- `tests/unit/petActions.spec.ts`
-
-> **Critério de done:** água só resolve sede, comida só resolve fome. Remédio cura os dois. Pet começa com fome (imediato) e fica com sede ~6h depois. Build sem erros TypeScript.
+Multiplicador x2 de velocidade continua (fastCount >= 7 na sessão).
 
 ---
 
-## Fora do Escopo deste MVP (não implementar agora)
+### 7.1 — Novo tipo `GameMode` e refatoração de `MasteryLevel`
+
+**Criar:** `src/types/gameMode.ts`
+
+```ts
+/** Operações disponíveis */
+type OperationMode = 'addition' | 'mixed';
+
+/** Dificuldade por dígitos no resultado */
+type DifficultyLevel = '1digit' | '2digit' | '3digit';
+
+/** Configuração escolhida pela criança */
+interface GameMode {
+  operation: OperationMode;
+  difficulty: DifficultyLevel;
+}
+
+/** Mapear difficulty → maxResult para generateProblem */
+const DIFFICULTY_MAX_RESULT: Record<DifficultyLevel, number> = {
+  '1digit': 9,
+  '2digit': 99,
+  '3digit': 999,
+};
+
+/** Mapear difficulty → moedas por acerto */
+const DIFFICULTY_COINS: Record<DifficultyLevel, number> = {
+  '1digit': 2,
+  '2digit': 5,
+  '3digit': 10,
+};
+```
+
+**Modificar:** `src/types/mastery.ts`
+- `MasteryLevel` perde `cpaPhase` (não usado mais na prática — tudo é 'abstract').
+- `MasteryLevel` continua com `operation` e `maxResult` para compatibilidade com `generateProblem`.
+- A progressão automática (`advanceMicrolevel`, `MICROLEVEL_PROGRESSION`) é removida ou desativada.
+
+> **Critério de done:** tipos definidos, build sem erros.
+
+---
+
+### 7.2 — Adaptar `generateProblem` para novos ranges
+
+**Modificar:** `src/lib/math/generateProblem.ts`
+
+Atualmente `getAdditionConfig(maxResult)` suporta até maxResult=20. Precisamos expandir:
+
+```
+maxResult <= 9:   operandA 1–8,   operandB 1–(9-operandA)     (resultado 2-9)
+maxResult <= 99:  operandA 10–89, operandB 1–9                (resultado 11-98)
+maxResult <= 999: operandA 100–989, operandB 1–9              (resultado 101-998)
+```
+
+Para subtração:
+```
+maxResult <= 9:   minuend 2–9,    subtrahend 1–(minuend-1)    (resultado >= 1)
+maxResult <= 99:  minuend 11–99,  subtrahend 1–9              (resultado >= 2)
+maxResult <= 999: minuend 101–999, subtrahend 1–9             (resultado >= 92)
+```
+
+Para `mixed` mode: 50% chance de adição, 50% subtração (random por exercício).
+
+> **Critério de done:** `generateProblem({ operation: 'addition', maxResult: 99 })` gera "45+8" corretamente. `mixed` alterna entre soma e subtração.
+
+---
+
+### 7.3 — Adaptar `useGameStore` para GameMode
+
+**Modificar:** `src/stores/useGameStore.ts`
+
+- Novo campo: `selectedMode: GameMode | null` (null = nenhum selecionado)
+- `startSession(mode: GameMode)` → salva mode, gera `MasteryLevel` equivalente
+- Para `mixed`: a cada exercício, sorteia `operation = Math.random() < 0.5 ? 'addition' : 'subtraction'`
+- Remover/simplificar `MasteryTracker` — não precisa mais de progressão automática
+- `submitExercise()` continua funcionando igual (correto/incorreto, tempo, moedas)
+- Persistir `selectedMode` no localStorage (última escolha da criança)
+
+**Moedas:** usar `DIFFICULTY_COINS[mode.difficulty]` em vez do cálculo antigo por `maxResult`.
+
+> **Critério de done:** `startSession({ operation: 'mixed', difficulty: '2digit' })` inicia sessão com mix de soma/subtração até 99.
+
+---
+
+### 7.4 — Tela de Seleção de Nível na PetHub
+
+**Modificar:** `src/components/screens/PetHub.tsx`
+
+Substituir o botão único "Começar Lição" por seletor de nível + botão play.
+
+**Layout:**
+```
+┌─────────────────────────────┐
+│  🔥 Streak: 3 dias   🪙 24  │
+├─────────────────────────────┤
+│        [PetDisplay]         │
+│       😊 Feliz!             │
+├─────────────────────────────┤
+│ [💧 Usar] [🍎 Usar] [💊 Usar] │
+│ LOJA: [💧 4c] [🍎 6c] [💊 20c] │
+├─────────────────────────────┤
+│  O que vamos praticar?      │
+│                             │
+│  [  +  ]  [ + − ]          │  ← 2 botões toggle (um ativo)
+│                             │
+│  [ 1-9 ] [ 10-99 ] [100-999] │  ← 3 botões toggle (um ativo)
+│                             │
+│  🎮 COMEÇAR! (80px)         │  ← botão principal
+├─────────────────────────────┤
+│ [🗺️ Progresso]  [dev]       │
+└─────────────────────────────┘
+```
+
+**Regras de UI:**
+- Botões de toggle: fundo colorido quando selecionado, cinza quando não
+- Seleção padrão: última escolha da criança (persistida) ou `{ operation: 'addition', difficulty: '1digit' }`
+- Touch targets ≥ 48px em todos os botões
+- Labels grandes sem dependência de leitura:
+  - Operação: `+` e `+ −` (símbolos puros, sem texto)
+  - Dificuldade: `1-9`, `10-99`, `100-999` (números puros)
+- Ao mudar seleção, mostrar exemplo animado: "Ex: 45 + 8 = ?" (atualiza em tempo real)
+- Moedas por acerto visíveis: "🪙 5c por acerto" (muda com dificuldade)
+
+**Props de `onPlay`:**
+```ts
+// Antes:
+onPlay: () => void;
+
+// Depois:
+onPlay: (mode: GameMode) => void;
+```
+
+> **Critério de done:** criança escolhe "+" e "10-99", vê exemplo "45+8=?", clica Começar, sessão gera exercícios de 2 dígitos soma. Build sem erros TS.
+
+---
+
+### 7.5 — Adaptar coinCalculator e fluxo de sessão
+
+**Modificar:** `src/lib/coinCalculator.ts`
+- Usar `DIFFICULTY_COINS` em vez da tabela antiga por maxResult.
+
+**Modificar:** `src/App.tsx`
+- `handlePlay(mode: GameMode)` → chama `startSession(mode)`
+
+**Verificar:** `SessionSummaryScreen` — nenhuma mudança necessária (já recebe moedas calculadas).
+
+> **Critério de done:** moedas corretas por dificuldade. Loop completo: PetHub → selecionar → jogar → resumo → voltar.
+
+---
+
+### Ordem de Implementação (Sprint 7)
+
+```
+7.1 Tipos GameMode + refatoração MasteryLevel      ✅ COMPLETA
+7.2 Expandir generateProblem para novos ranges      ✅ COMPLETA
+7.3 Adaptar consumidores para GameMode               ✅ COMPLETA
+7.4 Tela de seleção na PetHub                        ✅ COMPLETA
+7.5 coinCalculator + fluxo de sessão                 ✅ COMPLETA
+```
+
+**O que NÃO muda:**
+- OCR pipeline (já suporta multi-dígitos)
+- DrawingCanvas (guias visuais já funcionam com `expectedDigits`)
+- Pet store (moedas, streak, inventário)
+- SessionSummaryScreen (já é genérica)
+
+**O que é removido/simplificado:**
+- `MasteryTracker` — sem progressão automática
+- `MICROLEVEL_PROGRESSION` — substituída por `DIFFICULTY_MAX_RESULT`
+- `advanceMicrolevel()` / `regressMicrolevel()` — não precisa mais
+- `cpaPhase` em `MasteryLevel` — tudo é abstract
+- Banners de desbloqueio (subtração, etc.) — criança já escolhe direto
+
+---
+
+## Backlog (fora do escopo atual)
+
+- **Estado de Sede**: água e comida independentes — funciona bem como está, adiado
+- **Progressão automática**: pode voltar como feature opcional (modo "Kumon" vs "Livre")
 
 - **PixiJS** — CSS + GIF resolve sem adicionar 4MB ao bundle
 - **Quarto isométrico** — pixel art fancy fica para v2
@@ -841,33 +907,18 @@ Mesma lógica para subtração (ex: 73-6, 452-8).
 
 ---
 
-## Ordem de Implementação Recomendada
+## Ordem de Implementação Geral
 
 ```
+Sprint 1 (loop principal):              ✅ COMPLETA
 Sprint 2 (bichinho virtual):            ✅ COMPLETA
-  2.1 usePetStore + petActions + utils  ✅
-  2.2 Economia integrada no fluxo       ✅
-  2.3 PetDisplay (visual do bichinho)   ✅
-  2.4 PetHub (nova tela principal)      ✅
-  2.5 Streak + troféu + rescue          ✅
-
-Audit de Bugs:                          ✅ COMPLETO
-  Bugs runtime (4 críticos)             ✅
-  Erros TypeScript (16 → 0)            ✅
-  Build limpo (npx vite build)          ✅
-
-Sprint 4 (polimento):
-  4.1 Subtração no fluxo                ✅
-  4.2 Testes automatizados              ✅
-  4.3 Acessibilidade                    ✅
+Sprint 3 (robustez):                    ✅ COMPLETA
+Sprint 4 (polimento):                   ✅ COMPLETA
+Sprint 5 (OCR precisão):                ✅ COMPLETA
+Sprint 6 (OCR inteligente):             ✅ COMPLETA
+Sprint 7 (seleção de nível):            ✅ COMPLETA
 ```
 
 ---
 
-## Princípio Guia
-
-> A cada etapa o app deve estar **usável**. Depois da Sprint 2.2, uma criança já ganha moedas de verdade. Depois da 2.4, o loop completo de pet funciona. Assets provisórios são aceitáveis — substituir depois.
-
----
-
-**Última atualização**: 2026-02-28 (Sprint 6 OCR inteligente especificada: context-aware 6.1 + confusion pairs 6.2 + rejeição rabisco 6.3)
+**Última atualização**: 2026-02-28 (Sprint 7 planejada: seleção de nível pela criança)

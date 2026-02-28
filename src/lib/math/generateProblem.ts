@@ -127,9 +127,9 @@ function generateAddition(maxResult: number, previousProblemId?: string): Proble
     attempts++;
 
     // Validações:
-    // 1. Resultado dentro do limite
+    // 1. Resultado dentro do limite (usa maxResult do input, não do config)
     // 2. Não repetir problema anterior
-    const isValidResult = result <= config.maxResult && result >= 1;
+    const isValidResult = result <= maxResult && result >= 1;
     const id = generateProblemId(operandA, operandB, 'addition');
     const isDifferentFromPrevious = id !== previousProblemId;
 
@@ -247,8 +247,9 @@ function generateSubtraction(maxResult: number, previousProblemId?: string): Pro
     // Validações:
     // 1. Resultado >= 0 (sem negativos para crianças)
     // 2. operandB < operandA (garantir resultado positivo)
-    // 3. Não repetir problema anterior
-    const isValidResult = result >= 0 && result <= maxResult;
+    // 3. Resultado dentro do limite do nível
+    // 4. Não repetir problema anterior
+    const isValidResult = result >= 0;
     const isValidOperands = operandB < operandA;
     const id = generateProblemId(operandA, operandB, 'subtraction');
     const isDifferentFromPrevious = id !== previousProblemId;
@@ -291,6 +292,14 @@ export function generateProblem(
   previousProblemId?: string
 ): Problem {
   const { operation, maxResult } = masteryLevel;
+
+  // Mixed mode: 50% adição, 50% subtração
+  if (operation === 'mixed') {
+    const randomOp = Math.random() < 0.5 ? 'addition' : 'subtraction';
+    return randomOp === 'addition'
+      ? generateAddition(maxResult, previousProblemId)
+      : generateSubtraction(maxResult, previousProblemId);
+  }
 
   if (operation === 'addition') {
     return generateAddition(maxResult, previousProblemId);

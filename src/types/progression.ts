@@ -56,7 +56,7 @@ export type ProblemResult = {
  * { operation: 'addition', maxResult: 20, cpaPhase: 'abstract' }
  */
 export type MasteryLevel = {
-  operation: Operation;
+  operation: Operation | 'mixed';
   maxResult: number;
   cpaPhase: CpaPhase;
 };

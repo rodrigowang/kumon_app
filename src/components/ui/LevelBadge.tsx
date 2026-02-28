@@ -14,7 +14,8 @@ interface LevelBadgeProps {
 
 export function LevelBadge({ level }: LevelBadgeProps) {
   const levelText = formatLevelName(level);
-  const color = level.operation === 'addition' ? 'green' : 'orange';
+  const color = level.operation === 'mixed' ? 'violet' :
+    level.operation === 'addition' ? 'green' : 'orange';
 
   return (
     <Badge

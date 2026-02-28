@@ -48,3 +48,15 @@ export {
   MICROLEVEL_PROGRESSION,
   CPA_PROGRESSION,
 } from './mastery';
+
+// Seleção de Nível (GameMode)
+export type {
+  OperationMode,
+  DifficultyLevel,
+  GameMode,
+} from './gameMode';
+export {
+  DIFFICULTY_MAX_RESULT,
+  DIFFICULTY_COINS,
+  DEFAULT_GAME_MODE,
+} from './gameMode';

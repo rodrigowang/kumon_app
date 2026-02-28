@@ -56,7 +56,9 @@ export default function SessionSummaryScreen({
   const [isVisible, setIsVisible] = useState(false);
   const [lessonResult, setLessonResult] = useState<CompletedLessonResult | null>(null);
 
-  const operationName = currentLevel.operation === 'addition' ? 'Somas' : 'Subtrações';
+  const operationName =
+    currentLevel.operation === 'mixed' ? 'Soma e Subtração' :
+    currentLevel.operation === 'addition' ? 'Somas' : 'Subtrações';
   const levelText = `${operationName} até ${currentLevel.maxResult}`;
 
   // Animação de entrada (flip in)

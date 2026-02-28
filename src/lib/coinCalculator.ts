@@ -6,6 +6,8 @@
  */
 
 import type { MasteryLevel } from '../types'
+import { DIFFICULTY_COINS } from '../types'
+import type { DifficultyLevel } from '../types'
 
 export type ItemType = 'water' | 'food' | 'medicine'
 
@@ -16,21 +18,25 @@ export const ITEM_PRICES: Record<ItemType, number> = {
   medicine: 20,
 }
 
+/** Mapeia maxResult → DifficultyLevel para lookup de moedas */
+function maxResultToDifficulty(maxResult: number): DifficultyLevel {
+  if (maxResult <= 9) return '1digit'
+  if (maxResult <= 99) return '2digit'
+  return '3digit'
+}
+
 /**
  * Moedas base ganhas por acerto, baseado no nível de dificuldade.
  *
- * | maxResult | Dificuldade     | Moedas/acerto |
- * |-----------|-----------------|---------------|
- * | ≤ 10      | 1+1 fácil       | 1c            |
- * | 11 – 20   | 1+1 difícil     | 3c            |
- * | 21 – 99   | 2+1 dígitos     | 8c            |
- * | ≥ 100     | 3+1 dígitos     | 15c           |
+ * | Dificuldade | maxResult | Moedas/acerto |
+ * |-------------|-----------|---------------|
+ * | 1 dígito    | ≤ 9       | 2c            |
+ * | 2 dígitos   | 10 – 99   | 5c            |
+ * | 3 dígitos   | ≥ 100     | 10c           |
  */
 export function getCoinsPerCorrect(level: MasteryLevel): number {
-  if (level.maxResult <= 10) return 1
-  if (level.maxResult <= 20) return 3
-  if (level.maxResult <= 99) return 8
-  return 15
+  const diff = maxResultToDifficulty(level.maxResult)
+  return DIFFICULTY_COINS[diff]
 }
 
 export interface CoinResult {
